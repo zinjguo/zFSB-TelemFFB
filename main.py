@@ -64,11 +64,10 @@ from PyQt6.QtCore import QCoreApplication, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit
 
 
-import resources
 import telemffb.globals as G
 import telemffb.utils as utils
 import telemffb.xmlutils as xmlutils
-from telemffb.hw.ffb_rhino import DeviceInfo, FFBRhino, HapticEffect
+from telemffb.hw.ffb_zfsb import DeviceInfo, FFBZfsb, HapticEffect
 from telemffb.IPCNetworkThread import IPCNetworkThread
 from telemffb.LogWindow import LogWindow
 from telemffb.MainWindow import MainWindow
@@ -80,7 +79,6 @@ from telemffb.utils import (AnsiColors, LoggingFilter, exit_application,
                             upload_vpconf_profile)
 from telemffb.namedmutex import NamedMutex
 import styles
-resources # used
 mutex = None
 
 def send_test_message():
@@ -123,10 +121,10 @@ def _check_master_instance_mutex():
         "TelemFFB is already running and cannot be started.  If you don't see the 'VP' icon in the system tray, "
         "check the task manager for possible hung instances."
     )
-    msg_box.setWindowIcon(QIcon(':/image/vpforceicon.png'))
+    msg_box.setWindowIcon(QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True)))
     global mutex
     try:
-        mutex = NamedMutex("VPforce_TelemFFB_Master_Instance", acquired=True, timeout=1)
+        mutex = NamedMutex("zTelem_Master_Instance", acquired=True, timeout=1)
         if not mutex.acquired:
             msg_box.exec()
             sys.exit(1)
@@ -149,16 +147,28 @@ def _setup_device_configuration():
 
         try:
             d = mapping[master_rb]
-            G.device_usbpid = str(G.system_settings.get(f'pid{d.capitalize()}', "2055"))
+            G.device_usbpid = str(G.system_settings.get(f'pid{d.capitalize()}', "FFB2"))
             G.device_type = d
         except KeyError:
-            G.device_usbpid = '2055'
+            G.device_usbpid = 'FFB2'
             G.device_type = 'joystick'
 
         if not G.device_usbpid: # check empty string
-            G.device_usbpid = '2055'
+            G.device_usbpid = 'FFB2'
 
-        G.device_usbvidpid = f"FFFF:{G.device_usbpid}"
+        if ":" in G.device_usbpid:
+            device_usbvid, device_usbpid = G.device_usbpid.split(":", 1)
+            if device_usbvid.upper() == "FFFF" and device_usbpid.upper() == "2055":
+                device_usbvid, device_usbpid = "2E8A", "FFB2"
+            G.device_usbvidpid = f"{device_usbvid}:{device_usbpid}"
+            G.device_usbpid = device_usbpid
+        else:
+            if G.device_usbpid.upper() == "2055":
+                G.device_usbpid = "FFB2"
+            device_usbvid = str(G.system_settings.get("vidJoystick", "2E8A"))
+            if device_usbvid.upper() == "FFFF":
+                device_usbvid = "2E8A"
+            G.device_usbvidpid = f"{device_usbvid}:{G.device_usbpid}"
         G.args.type = G.device_type
     else:
         if G.args.type is None:
@@ -174,50 +184,23 @@ def _setup_device_configuration():
 
 def _setup_theme_and_styling(app):
     """
-    Configure application theme and styling based on system settings.
+    Configure application theme and styling.
 
-    Flow:
-    1. Read theme preference (light/dark/system)
-    2. Set Qt color scheme accordingly
-    3. Create custom palette with accent colors
-    4. Apply dark mode palette if needed
-    5. Apply custom stylesheets
+    zTelem is dark-theme only. The old light/system theme setting is ignored
+    so existing registry values or command-line switches cannot flip the UI.
     """
-    theme_setting = G.system_settings.get('themeId', 2)
-
-    if G.args.darkmode:
-        theme_setting = 1
-
-    if G.args.lightmode:
-        theme_setting = 0
-
-    match theme_setting:
-        case 0: # Light Mode
-            app.styleHints().setColorScheme(Qt.ColorScheme.Light)
-            G.useDarkMode = False
-        case 1: # Dark Mode
-            app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
-            G.useDarkMode = True
-        case 2: # System Controlled
-            windows_mode = app.styleHints().colorScheme()
-            if windows_mode == Qt.ColorScheme.Light:
-                app.styleHints().setColorScheme(Qt.ColorScheme.Light)
-                G.useDarkMode = False
-            else:
-                app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
-                G.useDarkMode = True
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
+    G.useDarkMode = True
 
     # Create and set custom palette with accent color
     palette = app.palette()
-    accent_color = QtGui.QColor('#9430ad')
+    accent_color = QtGui.QColor(styles.zBlue)
     palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent_color)
     palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor('white'))
     palette.setColor(QtGui.QPalette.ColorRole.Link, accent_color)
     app.setPalette(palette)
 
-    if G.useDarkMode:
-        _apply_dark_mode_palette(app, palette)
-
+    _apply_dark_mode_palette(app, palette)
     _apply_custom_stylesheet(app)
 
 def _apply_dark_mode_palette(app, palette):
@@ -244,11 +227,8 @@ def _apply_dark_mode_palette(app, palette):
     app.setPalette(palette)
 
 def _apply_custom_stylesheet(app):
-    """Apply custom stylesheet based on theme mode."""
-    if G.useDarkMode:
-        app.setStyleSheet(styles.DARK_MODE_STYLESHEET)
-    else:
-        app.setStyleSheet(styles.LIGHT_MODE_STYLESHEET)
+    """Apply the dark-only application stylesheet."""
+    app.setStyleSheet(styles.DARK_MODE_STYLESHEET)
 
 def _determine_master_instance_status():
     """
@@ -278,15 +258,16 @@ def _setup_config_paths():
     Setup configuration file paths based on build type and mode.
 
     Flow:
-    1. Set defaults path from resources
+    1. Set defaults path from packaged files
     2. Configure logo based on build type and theme
     3. Setup userconfig paths for dev vs production
     4. Handle dev userconfig copying if needed
     """
     G.defaults_path = utils.get_resource_path('defaults.xml', prefer_root=True)
+    G.vpf_logo = utils.get_resource_path('image/zTelemLogo_white.png', prefer_root=True)
 
     if G.dev_build:
-        G.vpf_logo = ":/image/DEVlogo.png"
+        G.vpf_logo = utils.get_resource_path('image/DEVlogo.png', prefer_root=True)
         if G.dev_userconfig:
             _setup_dev_userconfig_paths()
         else:
@@ -296,7 +277,7 @@ def _setup_config_paths():
 
 def _setup_dev_userconfig_paths():
     """Setup development userconfig paths."""
-    real_userconfig_path = os.path.join(os.environ['LOCALAPPDATA'], "VPForce-TelemFFB")
+    real_userconfig_path = os.path.join(os.environ['LOCALAPPDATA'], "zTelem")
     real_userconfig = os.path.join(real_userconfig_path, 'userconfig_v2.xml')
     real_legacy_userconfig = os.path.join(real_userconfig_path, 'userconfig.xml')
 
@@ -315,16 +296,16 @@ def _setup_dev_userconfig_paths():
 
 def _setup_standard_config_paths():
     """Setup standard configuration paths."""
-    G.userconfig_rootpath = os.path.join(os.environ['LOCALAPPDATA'], "VPForce-TelemFFB")
+    G.userconfig_rootpath = os.path.join(os.environ['LOCALAPPDATA'], "zTelem")
     G.userconfig_path = os.path.join(G.userconfig_rootpath, 'userconfig_v2.xml')
 
 def _initialize_device_connection():
     """
-    Initialize connection to the Rhino device and check firmware.
+    Initialize connection to the zFSB/OpenFFB device and check firmware.
     
     Flow:
     1. Parse USB VID/PID from configuration
-    2. Enumerate all available Rhino devices
+    2. Enumerate all available zFSB/OpenFFB devices
     3. Attempt to connect to specified device
     4. Validate firmware version meets requirements
     5. Extract device identity and serial number
@@ -353,7 +334,7 @@ def _initialize_device_connection():
         dev_serial = dev.serial
 
         if dev_firmware_version:
-            logging.info(f"Rhino Firmware: {dev_firmware_version}")
+            logging.info(f"zFSB Firmware: {dev_firmware_version}")
             _check_firmware_version(dev_firmware_version, min_firmware_version)
 
         G.device_ident = dev.info.ident
@@ -362,20 +343,40 @@ def _initialize_device_connection():
     except Exception as e:
         G.device_connection_status = False
         logging.exception("Exception")
-        QMessageBox.warning(None, "Cannot connect to Rhino",
+        QMessageBox.warning(None, "Cannot connect to zFSB",
                           f"Unable to open HID at {G.device_usbvidpid} for device: {G.device_type}\nError: {e}\n\n"
                           "Please open the System Settings and verify the Master\ndevice PID is configured correctly")
 
     return dev, dev_serial, dev_firmware_version
 
 def _enumerate_and_log_devices():
-    """Enumerate and log available Rhino devices."""
-    devs = FFBRhino.enumerate()
-    logging.info("Available Rhino Devices:")
+    """Enumerate and log available zFSB/OpenFFB devices."""
+    try:
+        vid_pid = [int(x, 16) for x in G.device_usbvidpid.split(":")]
+    except Exception:
+        vid_pid = [0, 0]
+    raw_devs = FFBZfsb.enumerate_raw(vid_pid[0], vid_pid[1])
+    devs = FFBZfsb.enumerate(vid_pid[0], vid_pid[1])
+    logging.info("Available zFSB/OpenFFB Devices:")
     logging.info("-------")
+    if not raw_devs:
+        logging.info(f"No HID devices found for VID:PID {vid_pid[0]:04X}:{vid_pid[1]:04X}")
+    elif not devs:
+        logging.info(f"HID devices found for VID:PID {vid_pid[0]:04X}:{vid_pid[1]:04X}, but none matched zFSB filters")
+    for raw_dev in raw_devs:
+        logging.info(
+            f"* raw {raw_dev.vendor_id:04X}:{raw_dev.product_id:04X} "
+            f"usage_page={raw_dev.usage_page:04X} usage={raw_dev.usage:04X} "
+            f"interface={raw_dev.interface_number} - {raw_dev.product_string} - {raw_dev.serial_number}"
+        )
+        logging.info(f"* raw Path:{raw_dev.path}")
     for devinfo in devs:
         devinfo : DeviceInfo
-        logging.info(f"* {devinfo.vendor_id:04X}:{devinfo.product_id:04X} - {devinfo.product_string} - {devinfo.serial_number}")
+        logging.info(
+            f"* selected {devinfo.vendor_id:04X}:{devinfo.product_id:04X} "
+            f"usage_page={devinfo.usage_page:04X} usage={devinfo.usage:04X} "
+            f"interface={devinfo.interface_number} - {devinfo.product_string} - {devinfo.serial_number}"
+        )
         logging.info(f"* Path:{devinfo.path}")
         logging.info(f"*")
         if G.master_instance:
@@ -394,7 +395,7 @@ def _check_firmware_version(dev_firmware_version, min_firmware_version):
         msg.setTextFormat(Qt.TextFormat.RichText)  # Enable HTML formatting
         msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         msg.setText(
-            f"This version of TelemFFB requires Rhino Firmware version <b>{minver}</b> or later.<br><br>"
+            f"This version of TelemFFB requires zFSB firmware version <b>{minver}</b> or later.<br><br>"
             f"The current version installed is <b>{devver}</b>.<br><br>"
             "Please update to avoid errors.<br>"
             '<a href="https://vpforcecontrols.com/usb/rhino/">Web USB Updater</a>'
@@ -560,7 +561,7 @@ def _setup_async_initialization(dev, dev_serial):
             logging.exception("Unable to get configurator slider values from device")
 
         if G.system_settings.get('enableVPConfStartup', False):
-            logging.info(f'Starting aysnc "startup vpconf" config push: {G.system_settings.get('pathVPConfStartup', '')}')
+            logging.info(f"Starting async startup vpconf config push: {G.system_settings.get('pathVPConfStartup', '')}")
             G.vpconf_init_pending = True # True flag delays telemetry process until async process completed by upload_vpconf_profile
             try:
                 upload_vpconf_profile(G.system_settings.get('pathVPConfStartup', ''), dev_serial)
@@ -625,7 +626,7 @@ def main():
     #QApplication.setAttribute(QtCore.Qt.ApplicationAttribute. AA_EnableHighDpiScaling, True) #enable highdpi scaling
     #QApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)  #use highdpi icons
 
-    dev : FFBRhino = None
+    dev : FFBZfsb = None
 
     # Initialize Qt application with Fusion style for consistent cross-platform appearance
     app = QApplication(sys.argv)
@@ -740,7 +741,7 @@ def main():
     # ============================================================================
     # PHASE 9: Device Connection and Firmware Validation
     # ============================================================================
-    # Connect to Rhino FFB device and validate firmware version
+    # Connect to zFSB/OpenFFB FFB device and validate firmware version
     dev, dev_serial, dev_firmware_version = _initialize_device_connection()
 
     # Set logging level based on system settings
@@ -818,7 +819,7 @@ def main():
     _cleanup_on_exit(dev_serial)
 
 def _init_logging(log_widget : QPlainTextEdit):
-    log_folder = os.path.join(os.environ['LOCALAPPDATA'], "VPForce-TelemFFB", 'log')
+    log_folder = os.path.join(os.environ['LOCALAPPDATA'], "zTelem", 'log')
     
     sys.stdout = utils.OutLog(log_widget, sys.stdout)
     sys.stderr = utils.OutLog(log_widget, sys.stderr)

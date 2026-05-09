@@ -50,7 +50,7 @@ from telemffb.util.Vector import Vector, Vector2D
 
 import telemffb.globals as G
 import telemffb.utils as utils
-from telemffb.hw.ffb_rhino import (FFBReport_Input, FFBReport_SetCondition,
+from telemffb.hw.ffb_zfsb import (FFBReport_Input, FFBReport_SetCondition,
                                    HapticEffect)
 from telemffb.sim.aircraft_base import AircraftBase, HPFs, LPFs, effects, perftracker
 from telemffb.utils import Derivative, Dispenser, HighPassFilter, clamp, overrides

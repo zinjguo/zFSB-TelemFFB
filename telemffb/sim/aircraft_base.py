@@ -26,9 +26,9 @@ import telemffb.utils as utils
 from typing import List, Dict
 # from utils import clamp, HighPassFilter, Derivative, Dispenser
 
-from telemffb.hw.ffb_rhino import EFFECT_TRIANGLE, HapticEffect, FFBReport_SetCondition
-from telemffb.hw.ffb_rhino import EFFECT_SPRING,EFFECT_DAMPER, EFFECT_INERTIA, EFFECT_FRICTION, EFFECT_SPRING_ADJUSTER
-from telemffb.hw.ffb_rhino import EFFECT_SAWTOOTHUP, EFFECT_SAWTOOTHDOWN
+from telemffb.hw.ffb_zfsb import EFFECT_TRIANGLE, HapticEffect, FFBReport_SetCondition
+from telemffb.hw.ffb_zfsb import EFFECT_SPRING,EFFECT_DAMPER, EFFECT_INERTIA, EFFECT_FRICTION, EFFECT_SPRING_ADJUSTER
+from telemffb.hw.ffb_zfsb import EFFECT_SAWTOOTHUP, EFFECT_SAWTOOTHDOWN
 import telemffb.globals as G
 from telemffb.globals import master_instance, master_buttons
 from telemffb.util.conversions import kt2ms

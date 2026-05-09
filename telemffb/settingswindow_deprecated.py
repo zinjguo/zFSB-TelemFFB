@@ -88,7 +88,7 @@ class SettingsWindow(QtWidgets.QMainWindow, Ui_SettingsWindow):
         self.current_pattern = ''
         self.sim = self.current_sim
         self.setWindowTitle(f"TelemFFB Settings Manager ({self.device})")
-        self.setWindowIcon(QIcon(":/image/vpforceicon.png"))
+        self.setWindowIcon(QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True)))
         self.b_browse.clicked.connect(self.browse_vpconf_file)
         self.b_gainoverrides.clicked.connect(self.set_override_gains)
         self.b_update.clicked.connect(self.update_button)

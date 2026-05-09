@@ -21,6 +21,7 @@ from PyQt6.QtGui import QFont, QIcon, QTextCursor
 from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QVBoxLayout, QWidget, QMainWindow, QPlainTextEdit
 import os
 
+import telemffb.utils as utils
 
 import os
 
@@ -32,8 +33,8 @@ class LogTailWindow(QMainWindow):
         self.main_window = main_window
         self.setWindowTitle(f"Log File Monitor ({args.type})")
         # Construct the absolute path of the icon file
-        #icon_path = os.path.join(script_dir, "image/vpforceicon.png")
-        icon = QIcon(":/image/vpforceicon.png")
+        #icon_path = os.path.join(script_dir, "image/zTelemIcon.png")
+        icon = QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True))
         self.setWindowIcon(icon)
         self.resize(800, 500)
         self.move(self.main_window.x() + 50, self.main_window.y() + 100)

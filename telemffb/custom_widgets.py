@@ -34,11 +34,11 @@ from PyQt6.QtCore import Qt
 import numpy as np
 
 import telemffb.globals as G
-from telemffb.utils import HiDpiPixmap, Akima1DInterpolator, debug_caller_args
+from telemffb.utils import HiDpiPixmap, Akima1DInterpolator, debug_caller_args, get_resource_path
 import styles
 
-vpf_purple = "#ab37c8"   # rgb(171, 55, 200)
-t_purple = QColor(f"#44{vpf_purple[-6:]}")
+zBlue = styles.zBlue
+t_purple = QColor(f"#44{zBlue[-6:]}")
 
 class DetachedTabWindow(QtWidgets.QMainWindow):
     reattachRequested = pyqtSignal(str)  # emit the tab title
@@ -80,7 +80,7 @@ class AppStatusWidget(QWidget):
     request_set_active_configurator = pyqtSignal(bool)
     def __init__(self, master_instance=True, parent=None):
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.offline = False
         self.offline_recall_ac = ''
         self.offline_recall_ptn = ''
@@ -92,12 +92,12 @@ class AppStatusWidget(QWidget):
 
         grid = QGridLayout(self)
         grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        grid.setContentsMargins(10, 10, 10, 10)
+        grid.setContentsMargins(0, 0, 0, 0)
         grid.setVerticalSpacing(10)
         grid.setHorizontalSpacing(10)
 
         row = 0
-        label_align = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        label_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         value_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 
         sim_status_header = InfoLabel()
@@ -105,6 +105,20 @@ class AppStatusWidget(QWidget):
         sim_status_header.setToolTip('Enabled Sims:\n  DCS\n  MSFS\n  XPLANE\n\nDisabled Sims:\n  IL2')
 
         self.sim_status_label = SimStatusWidget()
+        self.joystick_status_label = QLabel("Disconnected")
+        self.joystick_status_label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.joystick_status_indicator = QLabel()
+        self.joystick_status_indicator.setFixedSize(10, 10)
+
+        self.joystick_status_value = QWidget()
+        self.joystick_status_value.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        joystick_status_layout = QHBoxLayout(self.joystick_status_value)
+        joystick_status_layout.setContentsMargins(0, 0, 0, 0)
+        joystick_status_layout.setSpacing(6)
+        joystick_status_layout.addWidget(self.joystick_status_label)
+        joystick_status_layout.addWidget(self.joystick_status_indicator)
+        self.set_joystick_connected(False)
+
         self.cur_craft_label = QLabel("None Detected")
         self.cur_pattern_label = QLabel("(No Match)")
         self.active_profile_label = QLabel("(None)")
@@ -140,7 +154,7 @@ class AppStatusWidget(QWidget):
         self.notification_label.setWordWrap(True)
         self.notification_label.setMinimumHeight(60)
         size_policy = self.notification_label.sizePolicy()
-        size_policy.setRetainSizeWhenHidden(True)
+        size_policy.setRetainSizeWhenHidden(False)
         self.notification_label.setSizePolicy(size_policy)
         self.notification_label.hide()
         self.notification_label.setStyleSheet("""
@@ -170,13 +184,43 @@ class AppStatusWidget(QWidget):
         """)
 
         # Stacked message layout
+        self.message_empty_label = QLabel('No messages')
+        self.message_empty_label.setStyleSheet("""
+            QLabel {
+                color: palette(mid);
+                padding: 6px 8px;
+            }
+        """)
+
         self.message_stack = QStackedLayout()
-        self.message_stack.addWidget(QLabel(''))  # Index 0
+        self.message_stack.addWidget(self.message_empty_label)  # Index 0
         self.message_stack.addWidget(self.notification_label)  # Index 1
         self.message_stack.addWidget(self.offline_label)  # Index 2
-        self.message_stack.setCurrentIndex(-1)
+        self.message_stack.setCurrentIndex(0)
+
+        self.message_box = QGroupBox("Messages")
+        self.message_box.setMinimumWidth(220)
+        self.message_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.message_box.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid palette(mid);
+                margin-top: 8px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }
+        """)
+        message_box_layout = QVBoxLayout(self.message_box)
+        message_box_layout.setContentsMargins(8, 12, 8, 8)
+        message_box_layout.addLayout(self.message_stack)
 
         # Layout content
+        grid.addWidget(QLabel("Joystick Status:"), row, 0, alignment=label_align)
+        grid.addWidget(self.joystick_status_value, row, 1, alignment=value_align)
+        row += 1
+
         grid.addWidget(sim_status_header, row, 0, alignment=label_align)
         grid.addWidget(self.sim_status_label, row, 1, alignment=value_align)
         row += 1
@@ -211,11 +255,24 @@ class AppStatusWidget(QWidget):
         grid.addWidget(self.active_configurator_label, row, 1, alignment=value_align)
         row += 1
 
-        grid.addLayout(self.message_stack, row, 0, 1, 2)
+        grid.addWidget(self.message_box, 0, 2, row, 1)
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
 
         if not master_instance:
             self.cb_selectProfileCombo.setDisabled(True)
             self.cb_selectProfileCombo.setVisible(False)
+
+    def set_joystick_connected(self, connected: bool):
+        color = "#00994c" if connected else "#cc3333"
+        self.joystick_status_label.setText("Connected" if connected else "Disconnected")
+        self.joystick_status_label.adjustSize()
+        self.joystick_status_indicator.setStyleSheet(f"""
+            QLabel {{
+                background-color: {color};
+                border-radius: 5px;
+            }}
+        """)
 
     def reset(self):
         self.offline = False
@@ -551,7 +608,7 @@ class NoWheelSlider(QSlider):
         super(NoWheelSlider, self).__init__(*args, **kwargs)
         # Default colors
         self.groove_color = "#bbb"
-        self.handle_color = vpf_purple
+        self.handle_color = zBlue
         self.handle_height = 20
         self.handle_width = 16
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -889,7 +946,7 @@ class InfoLabel(QWidget):
         # Information icon
         self.icon_label = QLabel(self)
         # icon_img = os.path.join(script_dir, "image/information.png")
-        icon_img = ":/image/information.png"
+        icon_img = get_resource_path("image/information.png", prefer_root=True)
         self.pixmap = HiDpiPixmap(icon_img)
         self.icon_label.setPixmap(self.pixmap._scaled(12, 12, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))  # Adjust the height as needed
         self.icon_label.setVisible(False)
@@ -1310,8 +1367,8 @@ class Toggle(QCheckBox):
 
     def __init__(self,
                  parent=None,
-                 bar_color=QColor("#44ab37c8"),
-                 checked_color="#ab37c8",
+                 bar_color=QColor(f"#44{zBlue[-6:]}"),
+                 checked_color=zBlue,
                  handle_color=Qt.GlobalColor.white,
                  disabled_color=Qt.GlobalColor.gray):
         super().__init__(parent)
@@ -1494,10 +1551,10 @@ class AnimatedToggle(QCheckBox):
     def __init__(self,
         parent=None,
         bar_color=Qt.GlobalColor.gray,
-        checked_color="#ab37c8",
+        checked_color=zBlue,
         handle_color=Qt.GlobalColor.white,
         pulse_unchecked_color="#44999999",
-        pulse_checked_color="#44#ab37c8"
+        pulse_checked_color=f"#44{zBlue[-6:]}"
         ):
         super().__init__(parent)
 
@@ -1752,12 +1809,12 @@ class CurveWidget(QWidget):
         self.grid_color = QColor(100, 100, 100) if dark_mode else QColor(Qt.GlobalColor.lightGray)
 
         # Curve line
-        self.curve_color = QColor("#ab37c8") if dark_mode else Qt.GlobalColor.blue
+        self.curve_color = QColor(zBlue) if dark_mode else Qt.GlobalColor.blue
 
         # Point fill
         self.point_fill = QColor(255, 200, 200) if dark_mode else QColor(255, 0, 0)
 
-        self.crosshair_color = Qt.GlobalColor.lightGray if G.useDarkMode else QColor("#ab37c8")
+        self.crosshair_color = Qt.GlobalColor.lightGray if G.useDarkMode else QColor(zBlue)
 
     def setEnabled(self, enabled: bool):
         """Enable or disable the widget."""

@@ -43,7 +43,7 @@ import time
 
 from telemffb import utils
 from telemffb.utils import overrides
-from telemffb.hw.ffb_rhino import (EFFECT_SINE, EFFECT_SQUARE, EFFECT_TRIANGLE, EFFECT_SAWTOOTHUP, EFFECT_SAWTOOTHDOWN, HapticEffect)
+from telemffb.hw.ffb_zfsb import (EFFECT_SINE, EFFECT_SQUARE, EFFECT_TRIANGLE, EFFECT_SAWTOOTHUP, EFFECT_SAWTOOTHDOWN, HapticEffect)
 from telemffb.sim.aircraft_base import AircraftBase, LPFs, effects, perftracker
 from telemffb.telem.DcsIpcThread import DcsIpcThread
 #unit conversions (to m/s)

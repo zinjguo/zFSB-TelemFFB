@@ -23,8 +23,8 @@ import os
 
 from PyQt6 import QtCore
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QIntValidator, QIcon, QPixmap
-from PyQt6.QtWidgets import QButtonGroup, QDialog, QFileDialog, QMessageBox, QSizePolicy, QStyleOption
+from PyQt6.QtGui import QIntValidator, QIcon, QPixmap, QRegularExpressionValidator
+from PyQt6.QtWidgets import QButtonGroup, QDialog, QFileDialog, QMessageBox, QStyleOption
 
 from . import globals as G
 from . import utils
@@ -67,35 +67,35 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
         style = self.style()  # Grab the current style engine
 
         # DCS
-        DCS_PIXMAP = HiDpiPixmap(':/image/icon_DCS.png')
+        DCS_PIXMAP = HiDpiPixmap(utils.get_resource_path('image/icon_DCS.png', prefer_root=True))
         self.DCS_ICON_ENABLED, self.DCS_ICON_DISABLED = self.make_icons(DCS_PIXMAP, style)
         self.DCS_TAB = self.simTabWidget.indexOf(self.tab_DCS)
         self.simTabWidget.setTabText(self.DCS_TAB, "")
         self.simTabWidget.setTabIcon(self.DCS_TAB, self.DCS_ICON_DISABLED)
 
         # MSFS
-        MSFS_PIXMAP = HiDpiPixmap(':/image/icon_MSFS.png')
+        MSFS_PIXMAP = HiDpiPixmap(utils.get_resource_path('image/icon_MSFS.png', prefer_root=True))
         self.MSFS_ICON_ENABLED, self.MSFS_ICON_DISABLED = self.make_icons(MSFS_PIXMAP, style)
         self.MSFS_TAB = self.simTabWidget.indexOf(self.tab_MSFS)
         self.simTabWidget.setTabText(self.MSFS_TAB, "")
         self.simTabWidget.setTabIcon(self.MSFS_TAB, self.MSFS_ICON_DISABLED)
 
         # XPLANE
-        XPLANE_PIXMAP = HiDpiPixmap(':/image/icon_XPLANE.png')
+        XPLANE_PIXMAP = HiDpiPixmap(utils.get_resource_path('image/icon_XPLANE.png', prefer_root=True))
         self.XPLANE_ICON_ENABLED, self.XPLANE_ICON_DISABLED = self.make_icons(XPLANE_PIXMAP, style)
         self.XPLANE_TAB = self.simTabWidget.indexOf(self.tab_XPLANE)
         self.simTabWidget.setTabText(self.XPLANE_TAB, "")
         self.simTabWidget.setTabIcon(self.XPLANE_TAB, self.XPLANE_ICON_DISABLED)
 
         # IL2
-        IL2_PIXMAP = HiDpiPixmap(':/image/icon_IL2.png')
+        IL2_PIXMAP = HiDpiPixmap(utils.get_resource_path('image/icon_IL2.png', prefer_root=True))
         self.IL2_ICON_ENABLED, self.IL2_ICON_DISABLED = self.make_icons(IL2_PIXMAP, style)
         self.IL2_TAB = self.simTabWidget.indexOf(self.tab_IL2)
         self.simTabWidget.setTabText(self.IL2_TAB, "")
         self.simTabWidget.setTabIcon(self.IL2_TAB, self.IL2_ICON_DISABLED)
 
         # BMS
-        BMS_PIXMAP = HiDpiPixmap(':/image/icon_BMS.png') if G.useDarkMode else HiDpiPixmap(':/image/icon_BMS_lm.png')
+        BMS_PIXMAP = HiDpiPixmap(utils.get_resource_path('image/icon_BMS.png' if G.useDarkMode else 'image/icon_BMS_lm.png', prefer_root=True))
         self.BMS_ICON_ENABLED, self.BMS_ICON_DISABLED = self.make_icons(BMS_PIXMAP, style)
         self.BMS_TAB = self.simTabWidget.indexOf(self.tab_BMS)
         self.simTabWidget.setTabText(self.BMS_TAB, "")
@@ -182,21 +182,16 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
         # Load settings from the registry and update widget states
         self.current_al_dict = {}
 
-        # only allow dark mode if debug menu visible
-        # self.useDarkmode.setVisible(G.system_settings.get('debug', False))
-        self.themeButtonGroup.setId(self.rb_LightTheme, 0)
-        self.themeButtonGroup.setId(self.rb_DarkTheme, 1)
-        self.themeButtonGroup.setId(self.rb_SystemTheme, 2)
-
         self.load_settings()
 
         int_validator = QIntValidator()
+        usb_id_validator = QRegularExpressionValidator(QtCore.QRegularExpression(r"[0-9A-Fa-f:]{0,9}"))
         self.tb_logPrune.setValidator(int_validator)
         self.telemTimeout.setValidator(int_validator)
-        self.tb_pid_j.setValidator(int_validator)
-        self.tb_pid_p.setValidator(int_validator)
-        self.tb_pid_c.setValidator(int_validator)
-        self.tb_pid_t.setValidator(int_validator)
+        self.tb_pid_j.setValidator(usb_id_validator)
+        self.tb_pid_p.setValidator(usb_id_validator)
+        self.tb_pid_c.setValidator(usb_id_validator)
+        self.tb_pid_t.setValidator(usb_id_validator)
 
         self.cb_min_enable_j.setObjectName('minimize_j')
         self.cb_min_enable_j.clicked.connect(self.toggle_launchmode_cbs)
@@ -240,11 +235,6 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
             self.cb_startToTray.setVisible(False)
             self.cb_masterStartMin.setVisible(False)
             self.cb_closeToTray.setVisible(False)
-            sp1 = self.themeOptions.sizePolicy()
-            sp1.setRetainSizeWhenHidden(False)
-            self.themeOptions.setSizePolicy(sp1)
-            self.themeOptions.setVisible(False)
-
             sp2 = self.masterLaunchOptions.sizePolicy()
             sp2.setRetainSizeWhenHidden(False)
             self.masterLaunchOptions.setSizePolicy(sp2)
@@ -259,7 +249,15 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
         self.simTabWidget.tabBar().setUsesScrollButtons(False)
         self.simTabWidget.tabBar().setDocumentMode(True)
 
+        self.hide_master_launch_options()
         self.select_enabled_sim()
+
+    def hide_master_launch_options(self):
+        for widget in (self.systab_line1, self.masterLaunchOptions):
+            size_policy = widget.sizePolicy()
+            size_policy.setRetainSizeWhenHidden(False)
+            widget.setSizePolicy(size_policy)
+            widget.setVisible(False)
 
     def select_enabled_sim(self):
         for sim in ('DCS', 'MSFS', 'XPLANE', 'IL2', 'BMS'):
@@ -602,7 +600,6 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
             'startToTray': self.cb_startToTray.isChecked(),
             'masterStartMin': self.cb_masterStartMin.isChecked(),
             'closeToTray': self.cb_closeToTray.isChecked(),
-            'themeId': self.themeButtonGroup.checkedId(),
         }
 
         instance_settings_dict = {
@@ -637,7 +634,6 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
             'pidPedals',
             'pidCollective',
             'pidTrimWheel',
-            'themeId'
         ]
         saved_al_dict = {}
         for key in key_list:
@@ -687,15 +683,6 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
         self.telemTimeout.setText(str(settings_dict.get('telemTimeout', 200)))
 
         self.ignoreUpdate.setChecked(settings_dict.get('ignoreUpdate', False))
-
-        themeID = settings_dict.get('themeId', 2)
-
-        self.themeButtonGroup.button(themeID).setChecked(True)
-
-
-        # self.useDarkmode.setChecked(settings_dict.get('useDarkmode', False))
-        #
-        # self.useWindowsTheme.setChecked(settings_dict.get('useWindowsTheme', False))
 
         self.cb_logPrune.setChecked(settings_dict.get('pruneLogs', False))
 
@@ -749,7 +736,10 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
 
         self.cb_save_view.setChecked(settings_dict.get('saveLastTab', True))
 
-        self.tb_pid_j.setText(str(settings_dict.get('pidJoystick', '2055')))
+        joystick_pid = str(settings_dict.get('pidJoystick', 'FFB2'))
+        if joystick_pid.upper() in ("2055", "FFFF:2055"):
+            joystick_pid = "FFB2"
+        self.tb_pid_j.setText(joystick_pid)
 
         self.tb_pid_p.setText(str(settings_dict.get('pidPedals', '')))
 
@@ -806,7 +796,6 @@ class SystemSettingsDialog(QDialog, Ui_SystemDialog):
             'pidPedals': str(self.tb_pid_p.text()),
             'pidCollective': str(self.tb_pid_c.text()),
             'pidTrimWheel': str(self.tb_pid_t.text()),
-            'themeId': self.themeButtonGroup.checkedId(),
         }
 
     def browse_vpconf(self, mode):

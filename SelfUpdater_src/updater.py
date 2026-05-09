@@ -219,7 +219,7 @@ class App(QMainWindow):
         self.version_label = QLabel(f"Current Installed Version: {g_current_version}\n\nLatest Available Version: {g_latest_version}")
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         version_layout.addWidget(self.version_label)
-        icon_path = os.path.join(g_application_path, "image/vpforceicon.png")
+        icon_path = os.path.join(g_application_path, "image/zTelemIcon.png")
         self.setWindowIcon(QIcon(icon_path))
         # Add QLabel for the image
         image_label = QLabel(self)

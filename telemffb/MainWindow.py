@@ -48,9 +48,9 @@ import telemffb.xmlutils as xmlutils
 # from telemffb.config_utils import autoconvert_config
 from telemffb.ConfiguratorDialog import ConfiguratorDialog
 from telemffb.custom_widgets import ClickLogo, InstanceStatusRow, NoKeyScrollArea, NoWheelSlider, NoWheelNumberSlider, \
-    SimStatusLabel, vpf_purple, AppStatusWidget, DetachedTabWindow
+    SimStatusLabel, zBlue, AppStatusWidget, DetachedTabWindow
 from telemffb.DevicePanel import DeviceIconPanel
-from telemffb.hw.ffb_rhino import HapticEffect
+from telemffb.hw.ffb_zfsb import HapticEffect
 from telemffb.SCOverridesEditor import SCOverridesEditor
 from telemffb.SettingsLayout import SettingsLayout
 # from telemffb.UserModelDialog import UserModelDialog
@@ -83,7 +83,7 @@ class MainWindow(QMainWindow):
 
         """ Add font used for settngs area group labels """
 
-        QFontDatabase.addApplicationFont(':/image/BlackOpsOne-Regular.ttf')
+        QFontDatabase.addApplicationFont(utils.get_resource_path('image/BlackOpsOne-Regular.ttf', prefer_root=True))
 
         # Get the absolute path of the script's directory
         # script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"TelemFFB v2")
 
         # Construct the absolute path of the icon file
-        icon = QIcon(":/image/vpforceicon.png")
+        icon = QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True))
 
         self.setWindowIcon(icon)
 
@@ -160,7 +160,7 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         self.menu = menubar
         # Set the background color of the menu bar
-        # "#ab37c8" is VPForce purple
+        # zBlue is the app accent color.
 
 
         """ Add the "System" menu and its sub-option """
@@ -232,21 +232,17 @@ class MainWindow(QMainWindow):
 
         self.update_action = QAction('Install Latest TelemFFB', self)
         self.update_action.triggered.connect(self.update_from_menu)
-        if not G.release_version:
-            utilities_menu.addAction(self.update_action)
+        # Updater menu entry intentionally hidden for now; keep the action and
+        # backing updater code intact so it can be restored later.
         self.update_action.setDisabled(True)
 
         download_action = QAction('Download Other Versions', self)
         download_action.triggered.connect(lambda: self.open_url(dl_url))
-        utilities_menu.addAction(download_action)
+        # Older-version download link is also hidden for now.
 
         self.reset_user_config_action = QAction('Reset User Config', self)
         self.reset_user_config_action.triggered.connect(self.reset_user_config)
         utilities_menu.addAction(self.reset_user_config_action)
-
-        self.vpconf_action = QAction("Launch VPforce Configurator", self)
-        self.vpconf_action.triggered.connect(lambda: utils.launch_vpconf())
-        utilities_menu.addAction(self.vpconf_action)
 
         reload_action = QAction('Force Reload Aircraft (Ctrl+Shift+R)', self)
         reload_action.triggered.connect(self.force_reload_aircraft)
@@ -324,16 +320,6 @@ class MainWindow(QMainWindow):
         self.support_action.triggered.connect(lambda: utils.create_support_bundle(G.userconfig_rootpath))
         help_menu.addAction(self.support_action)
 
-        # Create a line beneath the menu bar
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-
-        # Add the line to the menu frame layout
-        layout.addWidget(line)
-
-        # Set the layout of the menu frame as the main layout
-
         logo_status_layout = QGridLayout()
 
 
@@ -345,16 +331,10 @@ class MainWindow(QMainWindow):
         t_logo.setPixmap(t_pixmap)
 
 
-        """ Create Device Panel """
+        """ Create hidden device panel used for device scope/status state. """
 
-        device_groupbox = QGroupBox("Active Devices")
-
-        device_groupbox.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-        device_groupbox_layout = QVBoxLayout()
-        device_groupbox_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.device_panel = DeviceIconPanel()
-        device_groupbox_layout.addWidget(self.device_panel)
-        device_groupbox.setLayout(device_groupbox_layout)
+        self.device_panel.hide()
 
         if not G.master_instance:
             self.device_panel.set_devices([G.device_type])
@@ -365,13 +345,15 @@ class MainWindow(QMainWindow):
         """ Create Status Panel """
 
         self.status_container = AppStatusWidget(master_instance=G.master_instance)
-        status_group = QGroupBox("Application Status")
+        status_group = QWidget()
+        status_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         status_layout = QVBoxLayout(status_group)
-        status_layout.setContentsMargins(10, 18, 10, 8)
+        status_layout.setContentsMargins(0, 0, 0, 0)
         status_layout.addWidget(self.status_container)
 
         self.status_container.cb_selectProfileCombo.currentIndexChanged.connect(self.on_profile_change)
         self.status_container.sim_status_label.set_waiting()
+        self.status_container.set_joystick_connected(G.device_connection_status)
 
         def on_sims_changed(sim: SimTelemListener):
             self.status_container.update_enabled_sims(sim.name, sim.started)
@@ -384,30 +366,14 @@ class MainWindow(QMainWindow):
         G.sim_listeners.simStopped.connect(on_sims_changed)
 
 
-        """ Add spacer items to fill first row and 2nd column with 10x10 empty space """
-
-        logo_status_layout.addItem(QSpacerItem(10, 10, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed), 0, 0, 1, 1)
-        logo_status_layout.addItem(QSpacerItem(10, 10, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed), 0, 1, 1, 1)
-
-
         """ Add Logo to the top left cell """
 
-        logo_status_layout.addWidget(t_logo, 1, 0, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        logo_status_layout.addWidget(t_logo, 0, 0, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
 
-        """ Add spacer in row 2 """
+        """ Add Status widget to column 2 """
 
-        logo_status_layout.addItem(QSpacerItem(10, 10, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed), 2, 0, 1, 1)
-
-
-        """ Add device panel to row 3 column 0 """
-
-        logo_status_layout.addWidget(device_groupbox, 3, 0,alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-
-        """ Add Status widget to column 2, span 3 rows """
-
-        logo_status_layout.addWidget(status_group, 1, 2, 3, 1, alignment=Qt.AlignmentFlag.AlignTop)
-        logo_status_layout.addItem(QSpacerItem(10, 10, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed), 4, 0, 1, 1)
+        logo_status_layout.addWidget(status_group, 0, 2, alignment=Qt.AlignmentFlag.AlignTop)
 
         logo_status_layout.setColumnStretch(0, 1)
         logo_status_layout.setColumnStretch(1, 1)
@@ -422,21 +388,19 @@ class MainWindow(QMainWindow):
 
         new_craft_layout = QVBoxLayout()
         self.new_craft_button = QPushButton('Create/clone config for new aircraft')
-        ncb_css = """QPushButton {
-                            background-color: #ab37c8;
+        ncb_css = f"""QPushButton {{
+                            background-color: {zBlue};
                             border-style: outset;
                             border-width: 1px;
-                            border-radius: 10px;
                             border-color: black;
                             color: white;
                             font: bold 14px;
                             min-width: 10em;
                             padding: 5px;
-                        }"""
+                        }}"""
         self.new_craft_button.setStyleSheet(ncb_css)
         self.new_craft_button.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
         new_craft_layout.addWidget(self.new_craft_button)
-        new_craft_layout.addSpacing(7)
 
 
         """ Add new craft button to main layout """
@@ -695,7 +659,6 @@ class MainWindow(QMainWindow):
             btn.setStyleSheet("""
                 QToolButton {
                     border: 1px solid palette(mid);
-                    border-radius: 4px;
                     padding: 3px 9px;
                     background: palette(button);
                     color: palette(button-text);
@@ -819,7 +782,7 @@ class MainWindow(QMainWindow):
             f_vers = HapticEffect.device.get_firmware_version()
         except:
             f_vers = 'error fetching'
-        self.firmware_label.setText(f'Rhino Firmware: {f_vers}')
+        self.firmware_label.setText(f'zFSB Firmware: {f_vers}')
 
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.firmware_label.setAlignment(Qt.AlignmentFlag.AlignRight)
@@ -957,8 +920,8 @@ class MainWindow(QMainWindow):
                     G.ipc_instance.send_message(f"BUTTONS:{G.device_type}_{G.active_buttons}")
 
     def add_system_tray(self):
-        self.tray_icon.setIcon(QIcon(":/image/vpforceicon.png"))
-        self.tray_icon.setToolTip("VPforce TelemFFB")
+        self.tray_icon.setIcon(QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True)))
+        self.tray_icon.setToolTip("zTelem")
 
         # Create the tray menu
         tray_menu = QMenu()
@@ -1051,7 +1014,7 @@ class MainWindow(QMainWindow):
         self.tray_icon.show()
         if self.isHidden():
             #  don't show, send message to tray icon that will pop to notify user that TelemFFB is running in Tray
-            icon = QIcon(":/image/vpforceicon.png")
+            icon = QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True))
             self.pop_tray_notification(
                 None,
                 "TelemFFB is running in the system tray.  Double-Click the VPforce Icon to show or right click to set options in the context menu",
@@ -1061,7 +1024,7 @@ class MainWindow(QMainWindow):
     def toggle_start_with_windows(self, set_enabled=None):
         exe_path = sys.executable
         reg_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        reg_key_name = "VPforce TelemFFB"
+        reg_key_name = "zTelem"
 
         try:
             reg_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key_path, 0, winreg.KEY_SET_VALUE | winreg.KEY_READ)
@@ -1228,6 +1191,7 @@ class MainWindow(QMainWindow):
         G.device_connection_status = connected
         status = "ACTIVE" if connected else "DISCONNECTED"
         self.device_panel.set_device_status(G.device_type, status)
+        self.status_container.set_joystick_connected(connected)
 
     @pyqtSlot(str, str)
     def update_child_status(self, device, status):
@@ -1871,7 +1835,7 @@ class MainWindow(QMainWindow):
                     # Notification was shown recently, do not show again
                     return
             # Show the notification
-            icon = QIcon(":/image/vpforceicon.png")
+            icon = QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True))
             self.tray_icon.showMessage(title, message, icon)
             # Update the last shown time
             self.tray_notifications[notification_key] = current_time
@@ -1896,8 +1860,8 @@ class MainWindow(QMainWindow):
             if error:
                 # error is true and was previously false.  Set sys tray attributes and pop notification
 
-                self.tray_icon.setIcon(QIcon(':/image/vpforceicon_error.png'))
-                self.tray_icon.setToolTip(f"VPforce TelemFFB -- There is an error occurring:\n\n{message}")
+                self.tray_icon.setIcon(QIcon(utils.get_resource_path('image/zTelemIconError.png', prefer_root=True)))
+                self.tray_icon.setToolTip(f"zTelem -- There is an error occurring:\n\n{message}")
 
                 self.status_container.flag_error(message)
 
@@ -1905,12 +1869,12 @@ class MainWindow(QMainWindow):
 
 
             elif paused:
-                self.tray_icon.setIcon(QIcon(':/image/vpforceicon_paused.png'))
-                self.tray_icon.setToolTip(f"VPforce TelemFFB\n{source} is Paused ")
+                self.tray_icon.setIcon(QIcon(utils.get_resource_path('image/zTelemIconDis.png', prefer_root=True)))
+                self.tray_icon.setToolTip(f"zTelem\n{source} is Paused ")
 
             elif not paused:
-                self.tray_icon.setIcon(QIcon(':/image/vpforceicon_run.png'))
-                self.tray_icon.setToolTip(f"VPforce TelemFFB\n{source} is Running ")
+                self.tray_icon.setIcon(QIcon(utils.get_resource_path('image/zTelemIconRun.png', prefer_root=True)))
+                self.tray_icon.setToolTip(f"zTelem\n{source} is Running ")
                 # re-show the "current aircraft" label once error cleared
 
 
@@ -2165,7 +2129,7 @@ class MainWindow(QMainWindow):
                             my_slider.setHandleColor("#17c411")
                             break
                         else:
-                            my_slider.setHandleColor(vpf_purple)
+                            my_slider.setHandleColor(zBlue)
                     my_slider.blockSignals(False)
 
                 n_sliders = self.findChildren(NoWheelNumberSlider)
@@ -2204,7 +2168,7 @@ class MainWindow(QMainWindow):
                             my_slider.setHandleColor("#17c411")
                             break
                         else:
-                            my_slider.setHandleColor(vpf_purple)
+                            my_slider.setHandleColor(zBlue)
                     my_slider.blockSignals(False)
 
             is_paused = max(data.get('SimPaused', 0), data.get('Parked', 0))

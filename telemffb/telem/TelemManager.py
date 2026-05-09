@@ -32,7 +32,7 @@ import telemffb.globals as G
 import telemffb.utils as utils
 from telemffb.utils import dbprint
 import telemffb.xmlutils as xmlutils
-from telemffb.hw.ffb_rhino import HapticEffect
+from telemffb.hw.ffb_zfsb import HapticEffect
 from telemffb.sim import aircrafts_dcs, aircrafts_il2, aircrafts_msfs_xp
 from telemffb.telem.SimConnectManager import SimConnectManager
 from telemffb.utils import upload_vpconf_profile

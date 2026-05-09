@@ -19,6 +19,7 @@
 
 import telemffb.globals as G
 import telemffb.utils as utils
+import styles
 
 
 from PyQt6.QtCore import QRegularExpression, Qt
@@ -59,7 +60,7 @@ class TeleplotSetupDialog(QDialog, Ui_TeleplotDialog):
 
         # Teleplot Link
         bookmarked_section =  "https://teleplot.fr"
-        linkcolor = 'style="color: #c473d9;"' if G.useDarkMode else 'style="color: #ab37c8;"'
+        linkcolor = f'style="color: {styles.zBlue_light if G.useDarkMode else styles.zBlue};"'
         self.label.setText(f'Click to open a browser to: <a href="{bookmarked_section}" {linkcolor}>teleplot.fr</a>')
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         self.label.setOpenExternalLinks(True)

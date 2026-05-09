@@ -68,13 +68,13 @@ class AdvancedSpringDialog(QDialog, Ui_AdvancedSpringDialog):
         self.setWindowTitle(f"Advanced Spring Configuration ({self.device_type.capitalize()})")
         self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowType.WindowContextHelpButtonHint)
 
-        self.pb_copy_up.setIcon(QIcon(":/image/up_arrow.png"))
+        self.pb_copy_up.setIcon(QIcon(utils.get_resource_path("image/up_arrow.png", prefer_root=True)))
         self.pb_copy_up.setText('')
         self.pb_copy_up.setMinimumWidth(25)
         self.pb_copy_up.setToolTip('Copy Y-Axis settings up to X-Axis')
         self.pb_copy_up.clicked.connect(lambda: self.copy_y_to_x())
 
-        self.pb_copy_down.setIcon(QIcon(":/image/down_arrow.png"))
+        self.pb_copy_down.setIcon(QIcon(utils.get_resource_path("image/down_arrow.png", prefer_root=True)))
         self.pb_copy_down.setText('')
         self.pb_copy_down.setMinimumWidth(25)
         self.pb_copy_down.setToolTip('Copy X-Axis settings down to Y-Axis')
@@ -84,24 +84,24 @@ class AdvancedSpringDialog(QDialog, Ui_AdvancedSpringDialog):
         self.cb_airspeed_unit.setCurrentText(self.current_unit)
         self.cb_airspeed_unit.currentTextChanged.connect(self.change_airspeed_unit)
 
-        self.pb_airspeed_neg_ten.setIcon(QIcon(":/image/left_grey.png"))
+        self.pb_airspeed_neg_ten.setIcon(QIcon(utils.get_resource_path("image/left_grey.png", prefer_root=True)))
         self.pb_airspeed_neg_ten.setText('')
         self.pb_airspeed_neg_ten.setToolTip('Minus 10')
         self.pb_airspeed_neg_ten.clicked.connect(lambda: self.change_airspeed_scale(-10))
 
-        self.pb_airspeed_neg_hundred.setIcon(QIcon(":/image/left-left_grey.png"))
+        self.pb_airspeed_neg_hundred.setIcon(QIcon(utils.get_resource_path("image/left-left_grey.png", prefer_root=True)))
         self.pb_airspeed_neg_hundred.setText('')
         self.pb_airspeed_neg_hundred.setToolTip('Minus 100')
         self.pb_airspeed_neg_hundred.clicked.connect(lambda: self.change_airspeed_scale(-100))
         self.pb_airspeed_neg_hundred.setFixedWidth(25)
 
-        self.pb_airspeed_pos_ten.setIcon(QIcon(":/image/right_grey.png"))
+        self.pb_airspeed_pos_ten.setIcon(QIcon(utils.get_resource_path("image/right_grey.png", prefer_root=True)))
         self.pb_airspeed_pos_ten.setText('')
         self.pb_airspeed_pos_ten.setToolTip('Plus 10')
         self.pb_airspeed_pos_ten.clicked.connect(lambda: self.change_airspeed_scale(10))
 
 
-        self.pb_airspeed_pos_hundred.setIcon(QIcon(":/image/right-right_grey.png"))
+        self.pb_airspeed_pos_hundred.setIcon(QIcon(utils.get_resource_path("image/right-right_grey.png", prefer_root=True)))
         self.pb_airspeed_pos_hundred.setText('')
         self.pb_airspeed_pos_hundred.setToolTip('Plus 100')
         self.pb_airspeed_pos_hundred.clicked.connect(lambda: self.change_airspeed_scale(100))

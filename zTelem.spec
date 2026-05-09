@@ -3,8 +3,8 @@
 import PyInstaller.config
 import os
 
-#PyInstaller.config.CONF['distpath'] = "./dist/windows/VPforce-TelemFFB"
-distpath = PyInstaller.config.CONF['distpath'] + "/VPforce-TelemFFB"
+#PyInstaller.config.CONF['distpath'] = "./dist/windows/zTelem"
+distpath = PyInstaller.config.CONF['distpath'] + "/zTelem"
 block_cipher = None
 
 print(distpath)
@@ -12,7 +12,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[('xplane-plugin/TelemFFB-XPP/64/win.xpl', 'xplane-plugin/TelemFFB-XPP/64'), ('dll/hidapi.dll', '.'), ('simconnect/simconnect.dll', 'simconnect')],
-    datas=[('export/*', 'export'), ('defaults.xml', '.'),  ('config.ini', '.'), ('simconnect/*.json', 'simconnect'), ('_RELEASE_NOTES.txt', '.')],
+    datas=[('export/*', 'export'), ('defaults.xml', '.'),  ('config.ini', '.'), ('simconnect/*.json', 'simconnect'), ('image/*', 'image'), ('_RELEASE_NOTES.txt', '.')],
     hiddenimports=[
         'numpy._core._exceptions',
         'numpy._core.multiarray',
@@ -106,7 +106,7 @@ exe = EXE(
     #a.datas,
     [],
 	exclude_binaries=True,
-    name='VPforce-TelemFFB',
+    name='zTelem',
     icon='image/vpforceicon.ico',
     debug=False,
     bootloader_ignore_signals=False,
@@ -129,7 +129,7 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='VPforce-TelemFFB',
+    name='zTelem',
 )
 
 import shutil

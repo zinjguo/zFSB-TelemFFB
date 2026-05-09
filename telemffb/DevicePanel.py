@@ -12,18 +12,19 @@ from PyQt6.QtWidgets import (
 import os
 
 from telemffb import utils
+import styles
 
 ICON_SIZE = QSize(72, 72)
 
 DEVICE_ICONS = {
-    "joystick": ":/image/icon_joystick.png",
-    "pedals": ":/image/icon_pedals.png",
-    "collective": ":/image/icon_collective.png",
-    "trimwheel": ":/image/icon_trimwheel.png",
+    "joystick": utils.get_resource_path("image/icon_joystick.png", prefer_root=True),
+    "pedals": utils.get_resource_path("image/icon_pedals.png", prefer_root=True),
+    "collective": utils.get_resource_path("image/icon_collective.png", prefer_root=True),
+    "trimwheel": utils.get_resource_path("image/icon_trimwheel.png", prefer_root=True),
 }
 
 STATUS_COLORS = {
-    "normal": QColor(171, 55, 200, 255),   # purple
+    "normal": QColor(styles.zBlue),
     "ok": QColor(0, 153, 76, 220),         # green
     "warning": QColor(204, 153, 0, 220),   # amber
     "error": QColor(204, 51, 51, 255),     # red
@@ -32,7 +33,7 @@ STATUS_COLORS = {
 }
 
 STATUS_COLORS_DARK = {
-    "normal": QColor(171, 55, 200, 255),
+    "normal": QColor(styles.zBlue),
     "ok": QColor(0, 204, 102, 200),
     "warning": QColor(255, 204, 0, 200),
     "error": QColor(255, 77, 77, 255),
@@ -83,7 +84,7 @@ class DeviceIconWidget(QWidget):
         self.text_label = QLabel(self.device_name.capitalize(), self)
         self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.text_label.setFont(QFont("Top Secret", 12))
-        self.text_label.setStyleSheet("color: #ab37c8;")
+        self.text_label.setStyleSheet(f"color: {styles.zBlue};")
 
         self.opacity_effect = QGraphicsOpacityEffect()
         self.text_label.setGraphicsEffect(self.opacity_effect)
@@ -382,49 +383,19 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('fusion')  # Set Fusion style
     app.setFont(QFont('Segoe UI', 10))
-    global useDarkMode
-
-
     def _setup_theme_and_styling(app):
-        global useDarkMode
-        """
-        Configure application theme and styling based on system settings.
-
-        Flow:
-        1. Read theme preference (light/dark/system)
-        2. Set Qt color scheme accordingly
-        3. Create custom palette with accent colors
-        4. Apply dark mode palette if needed
-        5. Apply custom stylesheets
-        """
-        theme_setting = 1
-
-        match theme_setting:
-            case 0:  # Light Mode
-                app.styleHints().setColorScheme(Qt.ColorScheme.Light)
-                useDarkMode = False
-            case 1:  # Dark Mode
-                app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
-                useDarkMode = True
-            case 2:  # System Controlled
-                windows_mode = app.styleHints().colorScheme()
-                if windows_mode == Qt.ColorScheme.Light:
-                    app.styleHints().setColorScheme(Qt.ColorScheme.Light)
-                    useDarkMode = False
-                else:
-                    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
-                    useDarkMode = True
+        """Configure the standalone demo with the same dark-only theme."""
+        app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
 
         # Create and set custom palette with accent color
         palette = app.palette()
-        accent_color = QtGui.QColor('#9430ad')
+        accent_color = QtGui.QColor(styles.zBlue)
         palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent_color)
         palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor('white'))
         palette.setColor(QtGui.QPalette.ColorRole.Link, accent_color)
         app.setPalette(palette)
 
-        if useDarkMode:
-            _apply_dark_mode_palette(app, palette)
+        _apply_dark_mode_palette(app, palette)
 
 
     def _apply_dark_mode_palette(app, palette):

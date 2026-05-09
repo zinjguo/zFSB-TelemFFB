@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from subprocess import Popen
     from telemffb.CmdLineArgs import CmdLineArgs
     from telemffb.ConfiguratorDialog import ConfiguratorDialog
-    from telemffb.hw.ffb_rhino import DeviceInfo
+    from telemffb.hw.ffb_zfsb import DeviceInfo
 
 # Application state
 is_exe: bool = False
@@ -43,13 +43,13 @@ dev_build : bool = False # when True, build versions will use 'dev_build_str', w
 dev_userconfig: bool = True  # will use/create userconfig.xml in root when True (dev_build must also be true)
 dev_build_str: str = "DEV_BUILD"
 allow_multi_instance: bool = False  # if true, will skip mutex lock checks and allow multiple instances to run simultaneously
-vpf_logo: str = ":/image/TelemFFB_Logo.png"
+vpf_logo: str = "image/zTelemLogo_white.png"
 
 # UI components
 main_window :  'MainWindow' 
 settings_mgr : 'SettingsManager'
 log_window :   'LogWindow' 
-useDarkMode : bool = False
+useDarkMode : bool = True
 
 # Configuration paths and profiles
 userconfig_rootpath : str = ""
@@ -63,7 +63,7 @@ offline_config_mode: bool = False  # Tracks offline config mode for checking in 
 # Device information
 device_type : str = ""
 device_usbpid : str 
-device_usbvidpid : str  # "FFFF:2055"
+device_usbvidpid : str  # "2E8A:FFB2"
 device_ident : str  #Joystick, Pedals, etc.. as set in configurator
 device_firmware_version : str  # Firmware version as reported by device
 device_connection_status: bool = False # status of HID connection to device

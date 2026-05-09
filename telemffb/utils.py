@@ -416,7 +416,7 @@ def prune_log_files(path, number, unit):
                 logging.info(f'Deleting log archive: {filename} as it has exceeded the pruning threshold of {num_days} Days')
 
 # def set_reg(name, value):
-#     REG_PATH = r"SOFTWARE\VPForce\TelemFFB"
+#     REG_PATH = r"SOFTWARE\zFSB\TelemFFB"
 #     try:
 #         winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_PATH)
 #         registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_WRITE)
@@ -443,7 +443,7 @@ def prune_log_files(path, number, unit):
 
 
 # def get_reg(name):
-#     REG_PATH = r"SOFTWARE\VPForce\TelemFFB"
+#     REG_PATH = r"SOFTWARE\zFSB\TelemFFB"
 #     try:
 #         registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_PATH, 0, winreg.KEY_READ)
 
@@ -512,7 +512,7 @@ def create_support_bundle(userconfig_rootpath):
 
 
 def read_all_system_settings():
-    REG_PATH = r"SOFTWARE\VPForce\TelemFFB"
+    REG_PATH = r"SOFTWARE\zStudio\zTelem"
 
     settings_dict = {}
 
@@ -598,7 +598,7 @@ class SystemSettings(QSettings):
         return s
 
     def __init__(self, pid=None, tp=None):
-        super().__init__('VPforce', 'TelemFFB')
+        super().__init__('zStudio', 'TelemFFB')
         #self.def_inst_sys_dict, self.def_global_sys_dict = get_default_sys_settings(pid, tp, cmb=False)
         pass
 
@@ -2237,6 +2237,9 @@ def get_script_path():
 
 def get_resource_path(relative_path, prefer_root=False, force=False):
     """ Get absolute path to resource, works for dev and for PyInstaller """
+    if isinstance(relative_path, str) and relative_path.startswith(":/"):
+        relative_path = relative_path[2:]
+
     if getattr(sys, 'frozen', False):
         # we are running in a bundle
         bundle_dir = sys._MEIPASS
@@ -2485,6 +2488,10 @@ def load_custom_userconfig(new_path=""):
 
 
 def upload_vpconf_profile(config_filepath, serial):
+    logging.info("Skipping VPforce Configurator profile upload for zFSB/OpenFFB backend")
+    G.vpconf_init_pending = False
+    return
+
     settings = QSettings("VPforce", "RhinoFFB")
     vpconf_path = settings.value("path")
 
@@ -2545,30 +2552,30 @@ def get_device_logo(dev_type :str):
     match str.lower(dev_type):
         case 'joystick':
             if G.useDarkMode:
-                _device_logo = ':/image/logo_j_dm.png'
+                _device_logo = 'image/logo_j_dm.png'
             else:
-                _device_logo = ':/image/logo_j.png'
+                _device_logo = 'image/logo_j.png'
         case 'pedals':
             if G.useDarkMode:
-                _device_logo = ':/image/logo_p_dm.png'
+                _device_logo = 'image/logo_p_dm.png'
             else:
-                _device_logo = ':/image/logo_p.png'
+                _device_logo = 'image/logo_p.png'
         case 'collective':
             if G.useDarkMode:
-                _device_logo = ':/image/logo_c_dm.png'
+                _device_logo = 'image/logo_c_dm.png'
             else:
-                _device_logo = ':/image/logo_c.png'
+                _device_logo = 'image/logo_c.png'
         case 'trimwheel':
             if G.useDarkMode:
-                _device_logo = ':/image/logo_t_dm.png'
+                _device_logo = 'image/logo_t_dm.png'
             else:
-                _device_logo = ':/image/logo_t.png'
+                _device_logo = 'image/logo_t.png'
         case _:
             if G.useDarkMode:
-                _device_logo = ':/image/logo_j_dm.png'
+                _device_logo = 'image/logo_j_dm.png'
             else:
-                _device_logo = ':/image/logo_j.png'
-    return _device_logo
+                _device_logo = 'image/logo_j.png'
+    return get_resource_path(_device_logo, prefer_root=True)
 
 
 class ResultThread(threading.Thread):
@@ -2665,13 +2672,19 @@ def check_launch_instance(dev_type :str, master_port : int) -> subprocess.Popen:
     """
     dev_type_cap = dev_type.capitalize()
     if G.system_settings.get(f'autolaunch{dev_type_cap}', False) and G.device_type != dev_type:
-        usbpid = G.system_settings.get(f'pid{dev_type_cap}', '2055')
+        usbpid = G.system_settings.get(f'pid{dev_type_cap}', 'FFB2')
 
         if not usbpid:
             logging.warning("Device PID unset for device %s, not launching", dev_type)
             return None
         
-        usb_vidpid = f"FFFF:{usbpid}"
+        usbpid = str(usbpid)
+        if ":" in usbpid:
+            usb_vidpid = usbpid
+        else:
+            if usbpid.upper() == "2055":
+                usbpid = "FFB2"
+            usb_vidpid = f"2E8A:{usbpid}"
     
         args = [sys.argv[0], '-D', usb_vidpid, '-t', dev_type, '--child', '--masterport', str(master_port)]
         if sys.argv[0].endswith(".py"): # insert python interpreter if we launch ourselves as a script
@@ -2681,11 +2694,6 @@ def check_launch_instance(dev_type :str, master_port : int) -> subprocess.Popen:
             args.append('--minimize')
         if G.system_settings.get(f'startHeadless{dev_type_cap}', False):
             args.append('--headless')
-
-        if G.args.darkmode:
-            args.append('--darkmode')
-        elif G.args.lightmode:
-            args.append('--lightmode')
 
         logging.info("Auto-Launch: starting instance: %s", args)
         proc = ChildPopen(args)
@@ -2701,6 +2709,8 @@ class HiDpiPixmap(QPixmap):
         if isinstance(arg, QSize):  # If arg is QSize, create a pixmap with a specific size
             super().__init__(QSize(round(arg.width() * ratio), round(arg.height() * ratio)))
         elif isinstance(arg, str):  # If arg is a filename, create a pixmap from a file
+            if arg.startswith(":/"):
+                arg = get_resource_path(arg, prefer_root=True)
             super().__init__(arg)
         else:  # If no arg is provided, create an empty pixmap
             super().__init__()

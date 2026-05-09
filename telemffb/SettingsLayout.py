@@ -30,11 +30,11 @@ from PyQt6.QtWidgets import (QGridLayout, QLabel, QPushButton, QStyle, QMessageB
                              QToolButton, QCheckBox, QComboBox, QLineEdit, QFileDialog, QSpinBox, QHBoxLayout)
 
 from telemffb.ButtonPressThread import ButtonPressThread
-from telemffb.custom_widgets import (InfoLabel, NoWheelSlider, NoWheelNumberSlider, vpf_purple, t_purple, Toggle, EraseButton, NoWheelComboBox)
+from telemffb.custom_widgets import (InfoLabel, NoWheelSlider, NoWheelNumberSlider, zBlue, t_purple, Toggle, EraseButton, NoWheelComboBox)
 from telemffb.ConfiguratorDialog import ConfiguratorDialog
 from telemffb.AdvancedSpringDialog import AdvancedSpringDialog
 from telemffb.AdvancedGDialog import AdvancedGDialog
-from telemffb.hw.ffb_rhino import HapticEffect
+from telemffb.hw.ffb_zfsb import HapticEffect
 from telemffb.utils import validate_vpconf_profile, dbprint, HiDpiPixmap
 import telemffb.utils as utils
 import styles
@@ -559,7 +559,7 @@ class SettingsLayout(QGridLayout):
                     self.exclusive_list.append(pair)
             # print(item)
             checkbox = Toggle(
-                checked_color=vpf_purple,
+                checked_color=zBlue,
                 bar_color=t_purple
             )
 
@@ -1071,7 +1071,7 @@ class SettingsLayout(QGridLayout):
 
         # erase_button = QToolButton()
         icon = QIcon()
-        pixmap = HiDpiPixmap(":/image/delete_button.png")
+        pixmap = HiDpiPixmap(utils.get_resource_path("image/delete_button.png", prefer_root=True))
         #pixmap = pixmap.scaled(15, 15, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         icon.addPixmap(pixmap)
 
@@ -1088,7 +1088,7 @@ class SettingsLayout(QGridLayout):
         #
         # create info icon for later use
         info_icon = QIcon()
-        info_pixmap = HiDpiPixmap(":/image/info_icon.png")
+        info_pixmap = HiDpiPixmap(utils.get_resource_path("image/info_icon.png", prefer_root=True))
         info_pixmap = info_pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         info_icon.addPixmap(info_pixmap)
         info_label = QLabel()
@@ -1244,7 +1244,7 @@ class SettingsLayout(QGridLayout):
         if file_path:
             cfg_scope = xmlutils.device
             dev_type_cap = cfg_scope.capitalize()
-            usbpid = str(G.system_settings.get(f'pid{dev_type_cap}', '2055'))
+            usbpid = str(G.system_settings.get(f'pid{dev_type_cap}', 'FFB2'))
 
             if validate_vpconf_profile(file_path, pid=usbpid, dev_type=cfg_scope):
                 #lprint(f"Selected File: {file_path}")

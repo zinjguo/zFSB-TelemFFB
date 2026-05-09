@@ -30,7 +30,7 @@ class CmdLineArgs:
     """List of telemetry item names to send to teleplot"""
     
     device: Optional[str]
-    """Rhino device USB VID:PID identifier"""
+    """zFSB/OpenFFB device USB VID:PID identifier"""
     
     reset: Optional[bool]
     """Flag to reset all FFB effects"""
@@ -60,10 +60,7 @@ class CmdLineArgs:
     """Flag to minimize application on startup"""
 
     darkmode: Optional[bool]
-    """Flag to force dark mode theme"""
-
-    lightmode: Optional[bool]
-    """Flag to force light mode theme"""
+    """Deprecated; the UI is always dark"""
 
     def __init__(
         self,
@@ -79,8 +76,7 @@ class CmdLineArgs:
         child: Optional[bool] = False,
         masterport: Optional[str] = None,
         minimize: Optional[bool] = False,
-        darkmode: Optional[bool] = False,
-        lightmode: Optional[bool] = False
+        darkmode: Optional[bool] = False
     ) -> None:
         self.teleplot = teleplot
         self.plot = plot
@@ -95,7 +91,6 @@ class CmdLineArgs:
         self.masterport = masterport
         self.minimize = minimize
         self.darkmode = darkmode
-        self.lightmode = lightmode
 
     @classmethod
     def parse(cls):
@@ -108,7 +103,7 @@ class CmdLineArgs:
         parser.add_argument('-p', '--plot', type=str, nargs='+',
                             help='Telemetry item names to send to teleplot, separated by spaces')
 
-        parser.add_argument('-D', '--device', type=str, help='Rhino device USB VID:PID', default=None)
+        parser.add_argument('-D', '--device', type=str, help='zFSB/OpenFFB device USB VID:PID', default=None)
         parser.add_argument('-r', '--reset', help='Reset all FFB effects', action='store_true')
 
         # Add config file argument, default config.ini
@@ -122,8 +117,7 @@ class CmdLineArgs:
 
         parser.add_argument('--minimize', action='store_true', help='Minimize on startup')
 
-        parser.add_argument('--darkmode', action='store_true', help='Force dark mode theme')
-        parser.add_argument("--lightmode", action='store_true', help='Force light mode theme')
+        parser.add_argument('--darkmode', action='store_true', help='Deprecated; zTelem always uses dark mode')
 
         args = parser.parse_args()
 

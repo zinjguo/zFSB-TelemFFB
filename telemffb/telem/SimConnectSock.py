@@ -18,7 +18,7 @@
 
 
 from telemffb.telem.SimConnectManager import SimConnectManager
-from telemffb.hw.ffb_rhino import HapticEffect
+from telemffb.hw.ffb_zfsb import HapticEffect
 from telemffb.utils import overrides
 import telemffb.globals as G
 
