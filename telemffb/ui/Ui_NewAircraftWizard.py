@@ -7,6 +7,7 @@
 
 
 from PyQt6 import QtCore, QtGui, QtWidgets
+import styles
 
 
 class Ui_NewAircraftWizard(object):
@@ -182,8 +183,7 @@ class Ui_NewAircraftWizard(object):
         spacerItem5 = QtWidgets.QSpacerItem(20, 10, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
         self.gridLayout_6.addItem(spacerItem5, 4, 1, 1, 1)
         self.label_7 = QtWidgets.QLabel(parent=self.pg_model)
-        font = QtGui.QFont()
-        font.setFamily("Cascadia Mono")
+        font = styles.apply_font_family(QtGui.QFont())
         self.label_7.setFont(font)
         self.label_7.setObjectName("label_7")
         self.gridLayout_6.addWidget(self.label_7, 1, 0, 1, 2)
@@ -331,7 +331,7 @@ class Ui_NewAircraftWizard(object):
 "hr { height: 1px; border-width: 0; }\n"
 "li.unchecked::marker { content: \"\\2610\"; }\n"
 "li.checked::marker { content: \"\\2612\"; }\n"
-"</style></head><body style=\" font-family:\'Segoe UI\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"</style></head><body style=\"" + styles.rich_text_body_style() + "\">\n"
 "<p style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">Select or manually enter a match string below</span></p></body></html>"))
         self.label_7.setText(_translate("NewAircraftWizard", "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
@@ -339,7 +339,7 @@ class Ui_NewAircraftWizard(object):
 "hr { height: 1px; border-width: 0; }\n"
 "li.unchecked::marker { content: \"\\2610\"; }\n"
 "li.checked::marker { content: \"\\2612\"; }\n"
-"</style></head><body style=\" font-family:\'Segoe UI\'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"</style></head><body style=\"" + styles.rich_text_body_style() + "\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">TelemFFB uses regex to match aircraft names. For example:</p>\n"
 "<p style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">    Name.*        - </span>matches anything starting with \'<span style=\" font-style:italic;\">Name\'</span></p>\n"
 "<p style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">    ^Name$        - </span>matches <span style=\" font-weight:700;\">only</span> the exact <span style=\" font-style:italic;\">\'Name\'</span></p>\n"

@@ -20,6 +20,7 @@ from PyQt6 import QtCore
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton
 
 from telemffb import xmlutils
+import styles
 
 
 class UserModelDialog(QDialog):
@@ -78,11 +79,11 @@ class UserModelDialog(QDialog):
     def init_ui(self, sim, current_aircraft, current_type):
 
         layout = QVBoxLayout()
-        lb1_txt = """
+        lb1_txt = f"""
     <p>TelemFFB uses regex to match aircraft names</p>
-    <p><b style="font-family: Courier">Name.*</b> will match anything starting with '<b>Name</b>'</p>
-    <p><b style="font-family: Courier">^Name$</b> will match only the exact '<b>Name</b>'</p>
-    <p><b style="font-family: Courier">(The )?Name.*</b> matches starting with '<b>Name</b>' or '<b>The Name</b>'</p>
+    <p><b style="{styles.RICH_TEXT_FONT_FAMILY_STYLE}">Name.*</b> will match anything starting with '<b>Name</b>'</p>
+    <p><b style="{styles.RICH_TEXT_FONT_FAMILY_STYLE}">^Name$</b> will match only the exact '<b>Name</b>'</p>
+    <p><b style="{styles.RICH_TEXT_FONT_FAMILY_STYLE}">(The )?Name.*</b> matches starting with '<b>Name</b>' or '<b>The Name</b>'</p>
 
     <p><b>**Note** if this is a new livery for an existing aircraft, is recommended to clone from the default profile</b></p>
     <p><b>for that aircraft if one exists.  This is mandatory for aircraftad with special implementations like 'HPGHelicopter'</b></p>

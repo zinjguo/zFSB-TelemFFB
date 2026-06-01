@@ -20,6 +20,7 @@
 import inspect
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -34,21 +35,23 @@ from datetime import datetime
 from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import QCoreApplication, Qt, QTimer, QUrl, pyqtSlot
 from PyQt6.QtGui import (QColor, QCursor, QDesktopServices, QIcon,
-                         QKeySequence, QPixmap, QFontMetrics, QAction, QShortcut, QFontDatabase, QFont)
+                         QKeySequence, QPixmap, QFontMetrics, QAction, QShortcut, QFont,
+                         QPainter, QPen, QPainterPath, QLinearGradient, QBrush)
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox,
                              QComboBox, QFrame, QGridLayout, QGroupBox,
                              QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-                             QPushButton, QScrollArea, QTabWidget,
+                             QAbstractButton, QPushButton, QScrollArea,
                              QToolButton, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy, QSystemTrayIcon, QMenu,
-                             QDialog, QStatusBar, QSplitter)
+                             QDialog, QStackedWidget)
 
 import telemffb.globals as G
 import telemffb.utils as utils
 import telemffb.xmlutils as xmlutils
+import styles
 # from telemffb.config_utils import autoconvert_config
 from telemffb.ConfiguratorDialog import ConfiguratorDialog
 from telemffb.custom_widgets import ClickLogo, InstanceStatusRow, NoKeyScrollArea, NoWheelSlider, NoWheelNumberSlider, \
-    SimStatusLabel, zBlue, AppStatusWidget, DetachedTabWindow
+    SimStatusLabel, colorPrimary, AppStatusWidget
 from telemffb.DevicePanel import DeviceIconPanel
 from telemffb.hw.ffb_zfsb import HapticEffect
 from telemffb.SCOverridesEditor import SCOverridesEditor
@@ -62,10 +65,217 @@ from telemffb.TeleplotSetupDialog import TeleplotSetupDialog
 from telemffb.ProfileManager import ProfileManagerDialog, NewProfileDialog
 from telemffb.utils import exit_application, overrides, HiDpiPixmap
 
+
+class TelemetryPulseWidget(QWidget):
+    def __init__(self, parent=None, size=84):
+        super().__init__(parent)
+        self._phase = 0.0
+        self._timer = QTimer(self)
+        self._timer.setInterval(40)
+        self._timer.setSingleShot(False)
+        self._timer.setTimerType(QtCore.Qt.TimerType.CoarseTimer)
+        self._timer.timeout.connect(self._advance_phase)
+        self.setFixedSize(size, size)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+    def start(self):
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def stop(self):
+        self._timer.stop()
+
+    def _advance_phase(self):
+        self._phase = (self._phase + 0.02) % 1.0
+        self.update()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.start()
+
+    def hideEvent(self, event):
+        self.stop()
+        super().hideEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        side = min(self.width(), self.height())
+        center = QtCore.QPointF(self.rect().center())
+        min_radius = side * 0.16
+        max_radius = side * 0.44
+        accent = QColor(styles.colorPrimary)
+
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for delay in (0.0, 0.33, 0.66):
+            progress = (self._phase + delay) % 1.0
+            envelope = math.sin(math.pi * progress)
+            ring_color = QColor(accent)
+            ring_color.setAlpha(int(135 * envelope))
+            ring_width = max(1.0, 3.0 * envelope)
+            radius = min_radius + ((max_radius - min_radius) * progress)
+            painter.setPen(QPen(ring_color, ring_width))
+            painter.drawEllipse(center, radius, radius)
+
+        center_color = QColor(accent)
+        center_pulse = math.sin(2.0 * math.pi * self._phase)
+        center_color.setAlpha(int(220 + (15 * center_pulse)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(center_color)
+        center_radius = side * (0.075 + (0.012 * center_pulse))
+        painter.drawEllipse(center, center_radius, center_radius)
+        painter.end()
+
+
+class WaitingTelemetryPanel(QFrame):
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        panel_rect = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(panel_rect, 10, 10)
+
+        painter.fillPath(clip_path, QColor(styles.container_bg))
+        painter.setClipPath(clip_path)
+        self._paint_retrowave_grid(painter)
+        painter.setClipping(False)
+
+        painter.setPen(QPen(QColor(styles.menu_border), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(clip_path)
+        painter.end()
+
+    def _paint_retrowave_grid(self, painter):
+        width = self.width()
+        height = self.height()
+        if width <= 0 or height <= 0:
+            return
+
+        accent = QColor(styles.colorPrimary_lighter)
+        accent.setAlpha(34)
+        horizon_y = height * 0.42
+        bottom_y = height + 8
+        center_x = width / 2
+
+        gradient = QLinearGradient(0, bottom_y, 0, horizon_y)
+        bottom_color = QColor(styles.colorPrimary_lighter)
+        bottom_color.setAlpha(46)
+        horizon_color = QColor(styles.colorPrimary_lighter)
+        horizon_color.setAlpha(0)
+        gradient.setColorAt(0.0, bottom_color)
+        gradient.setColorAt(1.0, horizon_color)
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        painter.setPen(QPen(QBrush(gradient), 1))
+
+        vertical_count = 16
+        for index in range(vertical_count + 1):
+            t = (index / vertical_count) - 0.5
+            bottom_x = center_x + (t * width * 1.3)
+            horizon_x = center_x + (t * width * 0.22)
+            painter.drawLine(QtCore.QPointF(bottom_x, bottom_y), QtCore.QPointF(horizon_x, horizon_y))
+
+        horizontal_count = 14
+        for index in range(horizontal_count):
+            progress = index / horizontal_count
+            y = horizon_y + ((bottom_y - horizon_y) * (progress * progress))
+            painter.drawLine(QtCore.QPointF(0, y), QtCore.QPointF(width, y))
+
+
+class VerticalDrawerThumbButton(QAbstractButton):
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.setText(text)
+        self._hovered = False
+        self.setCheckable(True)
+        self.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        self.setMinimumWidth(26)
+        self.setMaximumWidth(26)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def sizeHint(self):
+        return QtCore.QSize(26, 180)
+
+    def minimumSizeHint(self):
+        return QtCore.QSize(26, 120)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        if self.isDown():
+            background = QColor(styles.container_bg)
+        elif self._hovered:
+            background = QColor(styles.vpf_button_hover)
+        else:
+            background = QColor(styles.container_bg)
+
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        painter.setPen(QPen(QColor(styles.status_drawer_thumb_border), 1))
+        painter.setBrush(background)
+        painter.drawRoundedRect(rect, 7, 7)
+
+        caret_center_y = 16
+        if self.isChecked():
+            caret_points = [
+                QtCore.QPointF(self.width() * 0.62, caret_center_y - 5),
+                QtCore.QPointF(self.width() * 0.38, caret_center_y),
+                QtCore.QPointF(self.width() * 0.62, caret_center_y + 5),
+            ]
+        else:
+            caret_points = [
+                QtCore.QPointF(self.width() * 0.38, caret_center_y - 5),
+                QtCore.QPointF(self.width() * 0.62, caret_center_y),
+                QtCore.QPointF(self.width() * 0.38, caret_center_y + 5),
+            ]
+        painter.setBrush(QColor("#ffffff"))
+        painter.drawPolygon(caret_points)
+
+        font = styles.app_font(8, QFont.Weight.Black)
+        font.setPixelSize(styles.status_drawer_thumb_font_size_px)
+        painter.setFont(font)
+        painter.setPen(QColor("#ffffff"))
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.rotate(-90)
+        text_rect = QtCore.QRectF(-self.height() / 2 + 18, -self.width() / 2, self.height() - 36, self.width())
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.text())
+        painter.end()
+
+
 class MainWindow(QMainWindow):
+    APP_VERSION_LABEL = "alpha-1"
+    STATUS_DRAWER_WIDTH = 420
+    TOOLBAR_MENU_ICON_PATHS = {
+        "system": "image/qlementine/toolbar_system.svg",
+        "profiles": "image/qlementine/toolbar_profiles.svg",
+        "utilities": "image/qlementine/toolbar_utilities.svg",
+        "window": "image/qlementine/toolbar_window.svg",
+        "log": "image/qlementine/toolbar_log.svg",
+        "debug": "image/qlementine/toolbar_debug.svg",
+    }
+    WINDOW_CONTROL_ICON_PATHS = {
+        "minimize": "image/qlementine/window_minimize.svg",
+        "maximize": "image/qlementine/window_maximize.svg",
+        "restore": "image/qlementine/window_restore.svg",
+        "close": "image/qlementine/window_close.svg",
+    }
     
     def __init__(self):
         super().__init__()
+        self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint, True)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_notifications = {}
         self.new_craft_notification_sent = False
@@ -79,47 +289,22 @@ class MainWindow(QMainWindow):
         self.show_new_craft_button = False
         self.profile_mgr_dialog = None
         self.all_offline_models = []
+        self.default_geometry_width = 12000
+        self.default_geometry_height = 700;
+        self._toolbar_drag_active = False
+        self._toolbar_drag_offset = QtCore.QPoint()
+        self._toolbar_logo_source = None
+        self._resize_border = 14
+        self._resize_edges = QtCore.Qt.Edge(0)
+        self._resize_event_filter_installed = False
 
 
-        """ Add font used for settngs area group labels """
-
-        QFontDatabase.addApplicationFont(utils.get_resource_path('image/BlackOpsOne-Regular.ttf', prefer_root=True))
-
-        # Get the absolute path of the script's directory
-        # script_dir = os.path.dirname(os.path.abspath(__file__))
-        doc_url = 'https://vpforcecontrols.com/downloads/VPforce_Rhino_Manual.pdf'
         if G.release_version:
             dl_url = 'https://github.com/walmis/VPforce-TelemFFB/releases'
         else:
             dl_url = 'https://vpforcecontrols.com/downloads/TelemFFB/?C=M;O=D'
 
-        # notes_url = os.path.join(script_dir, '_RELEASE_NOTES.txt')
-        notes_url = utils.get_resource_path('_RELEASE_NOTES.txt')
         G.current_device_config_scope = G.device_type
-        self.current_tab_index = 0
-
-        if G.system_settings.get('saveLastTab', 0):
-            data = G.system_settings.get("WindowData")
-            if data is not None:
-                tab = json.loads(data)
-                self.current_tab_index = tab.get("Tab", 0)
-
-        self.default_tab_sizes = {
-            "0": {  # monitor
-                'height': 530,
-                'width': 700,
-            },
-            "1": {  # settings
-                'height': 530,
-                'width': 700,
-            },
-            "2": {  # hide
-                'height': 0,
-                'width': 0,
-            }
-        }
-
-        self.tab_sizes = self.default_tab_sizes
 
         match G.device_type:
             case 'joystick':
@@ -135,13 +320,11 @@ class MainWindow(QMainWindow):
                 x_pos = 40
                 y_pos = 30
 
-        self.setGeometry(x_pos, y_pos, 530, 700)
+        self.setGeometry(x_pos, y_pos, self.default_geometry_width, self.default_geometry_height)
 
         version = utils.get_version()
-        if version:
-            self.setWindowTitle(f"TelemFFB v2 ({G.device_type}) ({version})")
-        else:
-            self.setWindowTitle(f"TelemFFB v2")
+
+        self.setWindowTitle(f"zTelem Alpha - {version}")
 
         # Construct the absolute path of the icon file
         icon = QIcon(utils.get_resource_path('image/zTelemIcon.png', prefer_root=True))
@@ -149,9 +332,20 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(icon)
 
         self.resize(530, 700)
-        self.hidden_active = False
+
+        self.toolbar_logo = QLabel()
+        self.toolbar_logo.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        self.toolbar_logo.setContentsMargins(0, 0, 0, 0)
+        self.toolbar_logo.setMinimumWidth(0)
+        self.toolbar_logo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._toolbar_logo_source = HiDpiPixmap(G.vpf_logo)
+        container_padding = styles.default_container_padding
+        container_spacing = max(6, container_padding // 2)
+
         # Create a layout for the main window
         layout = QVBoxLayout()
+        layout.setContentsMargins(container_padding, 0, container_padding, container_padding)
+        layout.setSpacing(container_spacing)
         notes_row_layout = QHBoxLayout()
 
 
@@ -160,7 +354,7 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
         self.menu = menubar
         # Set the background color of the menu bar
-        # zBlue is the app accent color.
+        # colorPrimary is the app accent color.
 
 
         """ Add the "System" menu and its sub-option """
@@ -197,7 +391,7 @@ class MainWindow(QMainWindow):
                 case 'trimwheel':
                     x_pos = 40
                     y_pos = 30
-            self.setGeometry(x_pos, y_pos, 530, 700)
+            self.set_default_geometry()
 
         reset_geometry.triggered.connect(do_reset_window_size)
         system_menu.addAction(reset_geometry)
@@ -298,37 +492,9 @@ class MainWindow(QMainWindow):
         self.log_menu.addAction(self.log_window_action)
 
 
-        """ Add Help Menu """
+        """ Add app toolbar buttons for root menus and hide native menu bar. """
 
-        help_menu = self.menu.addMenu('Help')
-
-        notes_action = QAction('Release Notes', self)
-        def do_open_file(url):
-            try:
-                file_url = QUrl.fromLocalFile(url)
-                QDesktopServices.openUrl(file_url)
-            except Exception as e:
-                logging.error(f"There was an error opening the file: {str(e)}")
-        notes_action.triggered.connect(lambda : do_open_file(notes_url))
-        help_menu.addAction(notes_action)
-
-        docs_action = QAction('Documentation', self)
-        docs_action.triggered.connect(lambda: self.open_url(doc_url))
-        help_menu.addAction(docs_action)
-
-        self.support_action = QAction("Create support bundle", self)
-        self.support_action.triggered.connect(lambda: utils.create_support_bundle(G.userconfig_rootpath))
-        help_menu.addAction(self.support_action)
-
-        logo_status_layout = QGridLayout()
-
-
-        """ Create Main App Logo Label """
-
-        t_logo = QLabel()
-        t_pixmap = HiDpiPixmap(G.vpf_logo)
-        t_pixmap = t_pixmap._scaled(round(t_pixmap.width()/5), round(t_pixmap.height()/5))
-        t_logo.setPixmap(t_pixmap)
+        self._install_app_toolbar()
 
 
         """ Create hidden device panel used for device scope/status state. """
@@ -345,11 +511,6 @@ class MainWindow(QMainWindow):
         """ Create Status Panel """
 
         self.status_container = AppStatusWidget(master_instance=G.master_instance)
-        status_group = QWidget()
-        status_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        status_layout = QVBoxLayout(status_group)
-        status_layout.setContentsMargins(0, 0, 0, 0)
-        status_layout.addWidget(self.status_container)
 
         self.status_container.cb_selectProfileCombo.currentIndexChanged.connect(self.on_profile_change)
         self.status_container.sim_status_label.set_waiting()
@@ -366,37 +527,20 @@ class MainWindow(QMainWindow):
         G.sim_listeners.simStopped.connect(on_sims_changed)
 
 
-        """ Add Logo to the top left cell """
-
-        logo_status_layout.addWidget(t_logo, 0, 0, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-
-
-        """ Add Status widget to column 2 """
-
-        logo_status_layout.addWidget(status_group, 0, 2, alignment=Qt.AlignmentFlag.AlignTop)
-
-        logo_status_layout.setColumnStretch(0, 1)
-        logo_status_layout.setColumnStretch(1, 1)
-
-
-        """ Add upper grid layout to main layout """
-
-        layout.addLayout(logo_status_layout)
-
-
         """ Create new craft button - pops when unknown aircraft is detected """
 
         new_craft_layout = QVBoxLayout()
+        new_craft_layout.setContentsMargins(0, 0, 0, 0)
+        new_craft_layout.setSpacing(container_spacing)
         self.new_craft_button = QPushButton('Create/clone config for new aircraft')
         ncb_css = f"""QPushButton {{
-                            background-color: {zBlue};
-                            border-style: outset;
-                            border-width: 1px;
-                            border-color: black;
+                            background-color: {colorPrimary};
+                            border: 0px solid transparent;
+                            border-radius: {styles.default_button_border_radius}px;
                             color: white;
-                            font: bold 14px;
+                            font: bold 14px "Roboto";
                             min-width: 10em;
-                            padding: 5px;
+                            padding: 5px 14px;
                         }}"""
         self.new_craft_button.setStyleSheet(ncb_css)
         self.new_craft_button.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
@@ -416,34 +560,30 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
         offline_config_layout = QVBoxLayout()  # vertical layout to hold both rows
+        offline_config_layout.setContentsMargins(container_padding, container_padding, container_padding, container_padding)
+        offline_config_layout.setSpacing(container_spacing)
 
 
         # First row layout (existing widgets)
         # --- Create the Offline Editor GroupBox ---
         self.offline_groupbox = QGroupBox("Offline Editor Setup")
-        self.offline_groupbox.setStyleSheet("""
-            QGroupBox {
-            
-                font-weight: bold;
-                border: 1px solid gray;
-                border-radius: 5px;
-                margin-top: 6px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
+
 
         offline_layout = QVBoxLayout(self.offline_groupbox)
-        offline_layout.setContentsMargins(10, 18, 10, 10)
-        offline_layout.setSpacing(10)
+        offline_layout.setContentsMargins(
+            container_padding,
+            container_padding + 6,
+            container_padding,
+            container_padding
+        )
+        offline_layout.setSpacing(container_spacing)
 
 
         """ Create Offline controls layout """
 
         offline_grid_layout = QGridLayout()
+        offline_grid_layout.setHorizontalSpacing(container_spacing)
+        offline_grid_layout.setVerticalSpacing(container_spacing)
 
         # --- Labels ---
         offline_sim_lbl = QLabel('Sim:')
@@ -521,6 +661,8 @@ class MainWindow(QMainWindow):
         """ Add layout for labels/buttons on bottom row of offline config area """
 
         bottom_row = QHBoxLayout()
+        bottom_row.setContentsMargins(0, 0, 0, 0)
+        bottom_row.setSpacing(container_spacing)
 
 
         """ Create offline scope label """
@@ -563,8 +705,6 @@ class MainWindow(QMainWindow):
         """ Add items to layout """
 
         offline_config_layout.addWidget(self.offline_groupbox)
-        offline_config_layout.addLayout(offline_grid_layout)
-        offline_config_layout.addLayout(bottom_row)
 
 
         """ Add layout to QWidget """
@@ -582,22 +722,25 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.offline_config_area)
 
 
-        """ Create tab widget where monitor/settings/hide will live """
+        """ Add message widget before the main content. It collapses when empty. """
 
-        self.tab_widget = QTabWidget(self)
-
-
-        """ Add the tab widget to the main layout """
-
-        layout.addWidget(self.tab_widget, stretch=1)
-        layout.setSpacing(0)
+        layout.addWidget(self.status_container.message_widget)
 
 
-        """ Create the monitor tab telemetry display panel """
+        """ Create the main content row where the status drawer and settings live. """
+
+        self.content_row = QWidget()
+        self.content_row_layout = QHBoxLayout(self.content_row)
+        self.content_row_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_row_layout.setSpacing(0)
+
+        """ Create the monitor telemetry display panel """
 
         self.monitor_widget = QWidget()
         self.telem_area = QScrollArea()
-        monitor_area_layout = QGridLayout()
+        monitor_area_layout = QVBoxLayout()
+        monitor_area_layout.setSpacing(container_spacing)
+        monitor_area_layout.setContentsMargins(0, 0, 0, 0)
         self.telem_area.setWidgetResizable(True)
         self.telem_area.setMinimumHeight(100)
 
@@ -622,7 +765,7 @@ class MainWindow(QMainWindow):
         self.lbl_telem_data.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self.lbl_telem_data.setStyleSheet("""
             padding: 2px;
-            font-family: Cascadia Mono;
+            font-family: Roboto;
         """)
 
 
@@ -630,51 +773,15 @@ class MainWindow(QMainWindow):
 
         self.telem_area.setWidget(self.lbl_telem_data)
 
-        self.lbl_effects_data = QLabel("            ")  # Empty space placeholder so splitter weights work
+        self.lbl_effects_data = QLabel("            ")
         self.effects_area.setWidget(self.lbl_effects_data)
         self.lbl_effects_data.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self.lbl_effects_data.setStyleSheet("""
-            padding: 2px;
-            font-family: Cascadia Mono;
-        """)
-
-        """ Create Monitor Page detach toolbar"""
-
-        self.monitor_detach_tb = QtWidgets.QToolBar(self.monitor_widget)
-        self.monitor_detach_tb.setObjectName("monitorInlineToolbar")
-        self.monitor_detach_tb.setMovable(False)
-        self.monitor_detach_tb.setFloatable(False)
-        self.monitor_detach_tb.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly)
-        self.monitor_detach_tb.setIconSize(QtCore.QSize(16, 16))
-        self.monitor_detach_tb.setStyleSheet("QToolBar { border: 0; background: transparent; }")
-
-        self.monitor_detach_act = self.monitor_detach_tb.addAction("Detach")
-        self.monitor_detach_act.setToolTip('Detach the Monitor Tab from the main window\ninto a separate window.')
-        self.monitor_detach_act.triggered.connect(lambda: self.detach_tab(0))
-
-        btn = self.monitor_detach_tb.widgetForAction(self.monitor_detach_act)
-        if isinstance(btn, QtWidgets.QToolButton):
-            btn.setAutoRaise(False)
-            btn.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
-            btn.setStyleSheet("""
-                QToolButton {
-                    border: 1px solid palette(mid);
-                    padding: 3px 9px;
-                    background: palette(button);
-                    color: palette(button-text);
-                }
-                QToolButton:hover { background: palette(midlight); }
-                QToolButton:pressed {
-                    background: palette(dark);
-                    color: palette(highlight);
-                }
-                QToolButton:disabled { color: palette(mid); border-color: palette(mid); }
-            """)
 
         telem_header_widget = QWidget()
         telem_header_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         telem_header_layout = QHBoxLayout(telem_header_widget)
         telem_header_layout.setContentsMargins(0, 0, 0, 0)
+        telem_header_layout.setSpacing(container_spacing)
         
         self.telem_lbl = QLabel('Telemetry:')
         self.telem_filter = QLineEdit()
@@ -688,7 +795,6 @@ class MainWindow(QMainWindow):
 
 
         """ Add telemetry label and filter placeholder to the layout """
-        telem_header_layout.addWidget(self.monitor_detach_tb)
         telem_header_layout.addWidget(self.telem_lbl)
         telem_header_layout.addWidget(self.telem_filter)
         telem_header_layout.addStretch()  # Push everything to the left
@@ -696,35 +802,35 @@ class MainWindow(QMainWindow):
 
         """ Add Active effects header label """
 
-        self.effect_lbl = QLabel('Active Effects:')
-        if G.master_instance:
-            self.effect_lbl.setText(f'Active Effects for: {G.current_device_config_scope}')
+        self.effect_lbl = QLabel('Active Effects')
+        """ Add telemetry monitor container to the monitor layout """
 
+        telemetry_monitor_group = QGroupBox()
+        telemetry_monitor_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
-        """ Add headers and labels to the monitor layout """
+        telemetry_monitor_layout = QVBoxLayout(telemetry_monitor_group)
+        telemetry_monitor_layout.setContentsMargins(
+            container_padding,
+            container_padding,
+            container_padding,
+            container_padding,
+        )
+        telemetry_monitor_layout.setSpacing(container_spacing)
+        telemetry_monitor_layout.addWidget(telem_header_widget)
+        telemetry_monitor_layout.addWidget(self.telem_area, stretch=2)
+        telemetry_monitor_layout.addWidget(self.effect_lbl)
+        telemetry_monitor_layout.addWidget(self.effects_area, stretch=1)
+        monitor_area_layout.addWidget(self.status_container)
 
-        monitor_area_layout.addWidget(telem_header_widget, 0, 0)
-        monitor_area_layout.addWidget(self.effect_lbl, 0, 1)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.telem_area)
-        splitter.addWidget(self.effects_area)
-        splitter.setStretchFactor(0, 2)  # Wider telemetry
-        splitter.setStretchFactor(1, 3)  # Narrow effects
-        monitor_area_layout.addWidget(splitter, 1, 0, 1, 2)  # Span both columns
+        monitor_area_layout.addWidget(telemetry_monitor_group, stretch=1)
 
         self.monitor_widget.setLayout(monitor_area_layout)
 
 
-        """ Add the monitor tab object to the tab widget"""
-
-        self.tab_widget.addTab(self.monitor_widget, "Monitor")
-
-        self._install_detachable_tabs()
-
         """ Create settings scroll area widget that will hold the settings page"""
 
         self.settings_area = NoKeyScrollArea()
-        self.settings_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.settings_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.settings_area.setWidgetResizable(True)
 
 
@@ -735,60 +841,59 @@ class MainWindow(QMainWindow):
 
         """ Create settings layout instance """
 
-        self.settings_layout = SettingsLayout(parent=self, mainwindow=self)
+        self.settings_layout = SettingsLayout(mainwindow=self)
+        self.settings_layout.setContentsMargins(
+            container_padding,
+            container_padding,
+            container_padding,
+            container_padding
+        )
+        self.settings_layout.setSpacing(container_spacing)
 
 
-        """ Add settings layout to the tab widget """
+        """ Add settings and monitor columns to the main splitter. """
 
         settings_widget.setLayout(self.settings_layout)
         self.settings_area.setWidget(settings_widget)
-        self.tab_widget.addTab(self.settings_area, "Settings")
+        self.waiting_telemetry_widget = self._create_waiting_telemetry_panel()
+        self.settings_stack = QStackedWidget()
+        self.settings_stack.setContentsMargins(0, 0, 0, 0)
+        self.settings_stack.addWidget(self.waiting_telemetry_widget)
+        self.settings_stack.addWidget(self.settings_area)
+        self.settings_stack.setCurrentWidget(self.waiting_telemetry_widget)
 
+        self.status_drawer = QWidget()
+        self.status_drawer.setObjectName("statusDrawer")
+        self.status_drawer.setMinimumWidth(0)
+        self.status_drawer.setMaximumWidth(self.STATUS_DRAWER_WIDTH)
+        status_drawer_layout = QVBoxLayout(self.status_drawer)
+        status_drawer_layout.setContentsMargins(0, 0, 0, 0)
+        status_drawer_layout.setSpacing(0)
+        status_drawer_layout.addWidget(self.monitor_widget)
 
-        """ Create the Hide tab and set its properties """
+        self.status_drawer_thumb = VerticalDrawerThumbButton("TELEMETRY & STATUS")
+        self.status_drawer_thumb.setObjectName("statusDrawerThumb")
+        self.status_drawer_thumb.setStyleSheet(styles.STATUS_DRAWER_THUMB_STYLESHEET)
+        self.status_drawer_thumb.setChecked(True)
+        self.status_drawer_thumb.clicked.connect(self.toggle_status_drawer)
+        self.status_drawer_gap = QWidget()
+        self.status_drawer_gap.setFixedWidth(styles.default_container_padding//2)
 
-        self.tab_widget.addTab(QWidget(), "Hide")
-        self.tab_widget.currentChanged.connect(self.switch_window_view)
-        tb_height = self.tab_widget.tabBar().sizeHint().height()
-        self.tab_widget.setMinimumHeight(tb_height)
-
+        self.content_row_layout.addWidget(self.status_drawer_thumb)
+        self.content_row_layout.addWidget(self.status_drawer_gap)
+        self.content_row_layout.addWidget(self.status_drawer)
+        self.content_row_layout.addSpacing(container_spacing)
+        self.content_row_layout.addWidget(self.settings_stack, stretch=1)
+        layout.addWidget(self.content_row, stretch=1)
+        layout.addWidget(self._create_app_footer())
 
         """ Create central widget to whole the entire layout """
 
         central_widget = QWidget()
+        central_widget.setObjectName("mainSurface")
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
-        self.layout = QVBoxLayout(central_widget)
-
-
-        """ Add status bar to hold version information """
-
-        self.status_bar = QStatusBar(self)
-
-        """ Add version label to the status bar """
-
-        self.version_label = QLabel()
-
-        if G.release_version:
-            status_text = f"Release Version {utils.get_version()}"
-        else:
-            status_text = "UNKNOWN"
-
-        self.version_label.setText(f'Version Status: {status_text}')
-        self.version_label.setOpenExternalLinks(True)
-        self.setStatusBar(self.status_bar)
-        self.firmware_label = QLabel()
-        try:
-            f_vers = HapticEffect.device.get_firmware_version()
-        except:
-            f_vers = 'error fetching'
-        self.firmware_label.setText(f'zFSB Firmware: {f_vers}')
-
-        self.version_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.firmware_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-        self.status_bar.addWidget(self.firmware_label)
-        self.status_bar.addPermanentWidget(self.version_label)
+        self.layout = layout
 
 
         """ Setup hooks to update the telemetry and settings widgets """
@@ -817,95 +922,485 @@ class MainWindow(QMainWindow):
         """  Create configurator gain dialog for use during TelemFFB session and store object in globals """
 
         G.gain_override_dialog = ConfiguratorDialog(self)
+        self._install_resize_event_filter()
 
-    def _install_detachable_tabs(self):
-        """Enable context menu on the tab bar for detaching/reattaching."""
-        self._detached_tabs = {}  # title -> {"win": DetachedTabWindow, "index": int, "widget": QWidget}
+    def _create_waiting_telemetry_panel(self):
+        wrapper = QWidget()
+        wrapper_layout = QVBoxLayout(wrapper)
+        wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        wrapper_layout.setSpacing(0)
 
-        bar = self.tab_widget.tabBar()
-        bar.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
-        bar.customContextMenuRequested.connect(self._show_tab_context_menu)
+        panel = WaitingTelemetryPanel()
+        panel.setObjectName("waitingTelemetryPanel")
+        panel.setStyleSheet(styles.WAITING_TELEMETRY_STYLESHEET)
+        panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        # Optional: keyboard shortcut to detach the Monitor tab
-        detach_shortcut = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
-        detach_shortcut.activated.connect(self._detach_monitor_via_shortcut)
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(
+            styles.default_container_padding,
+            styles.default_container_padding,
+            styles.default_container_padding,
+            styles.default_container_padding,
+        )
+        panel_layout.setSpacing(8)
+        panel_layout.addStretch(1)
 
-    def _detach_monitor_via_shortcut(self):
-        idx = self.tab_widget.indexOf(self.monitor_widget)
-        if idx != -1:
-            self.detach_tab(idx)
+        self.waiting_telemetry_pulse = TelemetryPulseWidget(panel)
 
-    def _show_tab_context_menu(self, pos: QtCore.QPoint):
-        bar = self.tab_widget.tabBar()
-        index = bar.tabAt(pos)
-        ## Montor page only supported for now
-        if index != 0:
+        title_label = QLabel("Waiting for telemetry")
+        title_label.setObjectName("waitingTelemetryTitle")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setWordWrap(True)
+
+        subtitle_label = QLabel("from supported games...")
+        subtitle_label.setObjectName("waitingTelemetrySubtitle")
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        manage_games_button = QPushButton("Manage Supported Games")
+        manage_games_button.setObjectName("manageSupportedGamesButton")
+        manage_games_button.clicked.connect(
+            lambda _checked=False: self.open_system_settings_dialog(show_simulator_setup=True)
+        )
+
+        panel_layout.addWidget(self.waiting_telemetry_pulse, alignment=Qt.AlignmentFlag.AlignHCenter)
+        panel_layout.addSpacing(4)
+        panel_layout.addWidget(title_label)
+        panel_layout.addWidget(subtitle_label)
+        panel_layout.addSpacing(28)
+        panel_layout.addWidget(manage_games_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        panel_layout.addStretch(1)
+
+        wrapper_layout.addWidget(panel)
+        return wrapper
+
+    def _show_waiting_for_telemetry(self):
+        if getattr(G.settings_mgr, "offline_mode", False):
+            self._show_settings_layout()
             return
-        title = self.tab_widget.tabText(index)
+        if hasattr(self, "settings_stack"):
+            self.settings_stack.setCurrentWidget(self.waiting_telemetry_widget)
+        if hasattr(self, "waiting_telemetry_pulse"):
+            self.waiting_telemetry_pulse.start()
 
-        menu = QtWidgets.QMenu(bar)
-        detach_act = QAction("Detach", self)
-        reattach_act = QAction("Reattach", self)
+    def _show_settings_layout(self):
+        if hasattr(self, "settings_stack"):
+            self.settings_stack.setCurrentWidget(self.settings_area)
+        if hasattr(self, "waiting_telemetry_pulse"):
+            self.waiting_telemetry_pulse.stop()
 
-        # Only allow detach/reattach for the Monitor tab (per your request)
-        is_monitor = (title == "Monitor")
-        is_detached = title in self._detached_tabs
+    def toggle_status_drawer(self):
+        self.set_status_drawer_open(self.status_drawer_thumb.isChecked(), animate=True)
 
-        detach_act.setEnabled(is_monitor and not is_detached)
-        reattach_act.setEnabled(is_monitor and is_detached)
-
-        detach_act.triggered.connect(lambda: self.detach_tab(index))
-        reattach_act.triggered.connect(lambda: self.reattach_tab(title))
-
-        menu.addAction(detach_act)
-        menu.addAction(reattach_act)
-        menu.exec(bar.mapToGlobal(pos))
-
-    def detach_tab(self, index: int):
-        if index == 0:  # Monitor Tab
-            self.monitor_detach_tb.setVisible(False)
-        title = self.tab_widget.tabText(index)
-        if hasattr(self, "_detached_tabs") and title in self._detached_tabs:
-            return
-        page = self.tab_widget.widget(index)
-        if page is None:
-            return
-
-        self.tab_widget.removeTab(index)
-        page.setParent(None)
-        page.show()
-
-        win = DetachedTabWindow(title, self)
-        win.reattachRequested.connect(self.reattach_tab)
-        win.adopt_page(page)
-        win.show()
-
-        self._detached_tabs = getattr(self, "_detached_tabs", {})
-        self._detached_tabs[title] = {"win": win, "index": index}
-
-    def reattach_tab(self, title: str):
-        entry = getattr(self, "_detached_tabs", {}).pop(title, None)
-        if not entry:
-            return
-
-        if title == 'Monitor':
-            self.monitor_detach_tb.setVisible(True)
-
-        win: DetachedTabWindow = entry["win"]
-        original_index: int = entry["index"]
-
-        page = win.release_page()
-        if page is None:
-            win.deleteLater()
+    def set_status_drawer_open(self, open_drawer, animate=False):
+        if not hasattr(self, "status_drawer"):
             return
 
-        win.deleteLater()
+        self.status_drawer_thumb.setChecked(open_drawer)
+        self.status_drawer_gap.setVisible(open_drawer)
+        self.status_drawer.setVisible(True)
+        start_width = self.status_drawer.maximumWidth()
+        end_width = self.STATUS_DRAWER_WIDTH if open_drawer else 0
 
-        insert_at = max(0, min(original_index, self.tab_widget.count()))
-        page.setParent(self.tab_widget)
-        self.tab_widget.insertTab(insert_at, page, title)
-        self.tab_widget.setCurrentWidget(page)
-        page.show()
+        if not animate:
+            self.status_drawer.setMaximumWidth(end_width)
+            self.status_drawer.setVisible(open_drawer)
+            return
+
+        self.status_drawer_animation = QtCore.QPropertyAnimation(self.status_drawer, b"maximumWidth", self)
+        self.status_drawer_animation.setDuration(180)
+        self.status_drawer_animation.setStartValue(start_width)
+        self.status_drawer_animation.setEndValue(end_width)
+        self.status_drawer_animation.setEasingCurve(QtCore.QEasingCurve.Type.InOutCubic)
+        if not open_drawer:
+            self.status_drawer_animation.finished.connect(lambda: self.status_drawer.setVisible(False))
+            self.status_drawer_animation.finished.connect(lambda: self.status_drawer_gap.setVisible(False))
+        else:
+            self.status_drawer_gap.setVisible(True)
+        self.status_drawer_animation.start()
+
+    def _create_app_footer(self):
+        footer = QFrame()
+        footer.setObjectName("appFooter")
+        footer.setStyleSheet(styles.APP_FOOTER_STYLESHEET)
+        footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        footer_layout = QHBoxLayout(footer)
+        footer_layout.setContentsMargins(2, 0, 2, 0)
+        footer_layout.setSpacing(6)
+
+        self.footer_joystick_indicator = QLabel()
+        self.footer_joystick_indicator.setFixedSize(8, 8)
+
+        self.footer_joystick_label = QLabel("Joystick:")
+        self.footer_joystick_label.setObjectName("footerJoystickLabel")
+
+        self.footer_joystick_value = QLabel()
+        self.footer_joystick_value.setObjectName("footerJoystickValue")
+
+        joystick_status = QWidget()
+        joystick_status_layout = QHBoxLayout(joystick_status)
+        joystick_status_layout.setContentsMargins(0, 0, 0, 0)
+        joystick_status_layout.setSpacing(6)
+        joystick_status_layout.addWidget(self.footer_joystick_label)
+        joystick_status_layout.addWidget(self.footer_joystick_value)
+        joystick_status_layout.addWidget(self.footer_joystick_indicator)
+
+        self.app_version_label = QLabel(self.APP_VERSION_LABEL)
+        self.app_version_label.setObjectName("appVersionLabel")
+        self.app_version_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        footer_layout.addWidget(joystick_status, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        footer_layout.addStretch()
+        footer_layout.addWidget(self.app_version_label, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        self._set_footer_joystick_connected(G.device_connection_status)
+        return footer
+
+    def _set_footer_joystick_connected(self, connected):
+        if not hasattr(self, "footer_joystick_value"):
+            return
+
+        color = "#00994c" if connected else "#cc3333"
+        self.footer_joystick_value.setText("Connected" if connected else "Disconnected")
+        self.footer_joystick_value.setProperty("connected", "true" if connected else "false")
+        self.footer_joystick_value.style().unpolish(self.footer_joystick_value)
+        self.footer_joystick_value.style().polish(self.footer_joystick_value)
+        self.footer_joystick_indicator.setStyleSheet(f"""
+            QLabel {{
+                background-color: {color};
+                border-radius: 4px;
+            }}
+        """)
+
+    def _install_app_toolbar(self):
+        self.app_toolbar = QtWidgets.QToolBar("App Toolbar", self)
+        self.app_toolbar.setObjectName("appToolbar")
+        self.app_toolbar.setMovable(False)
+        self.app_toolbar.setFloatable(False)
+        self.app_toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.app_toolbar.setIconSize(QtCore.QSize(16, 16))
+        toolbar_padding = styles.default_container_padding
+        toolbar_row_spacing = max(styles.titlebar_row_spacing, toolbar_padding // 3)
+        self.app_toolbar.setStyleSheet(f"""
+
+        """)
+        self._app_toolbar_menus = set()
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.app_toolbar)
+
+        self.toolbar_content = QWidget(self.app_toolbar)
+        self.toolbar_content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.toolbar_content_layout = QHBoxLayout(self.toolbar_content)
+        self.toolbar_content_layout.setContentsMargins(
+            toolbar_padding,
+            toolbar_padding//2,
+            toolbar_padding,
+            toolbar_padding//2,
+        )
+        self.toolbar_content_layout.setSpacing(toolbar_padding)
+        self.app_toolbar.addWidget(self.toolbar_content)
+        self.toolbar_content_layout.addWidget(self.toolbar_logo)
+
+        self.toolbar_stack = QWidget(self.toolbar_content)
+        self.toolbar_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.toolbar_stack_layout = QVBoxLayout(self.toolbar_stack)
+        self.toolbar_stack_layout.setContentsMargins(0, 0, 0, 0)
+        self.toolbar_stack_layout.setSpacing(toolbar_row_spacing)
+        self.toolbar_content_layout.addWidget(self.toolbar_stack, stretch=1)
+
+        self.toolbar_window_controls = QHBoxLayout()
+        self.toolbar_window_controls.setContentsMargins(0, 0, 0, 0)
+        self.toolbar_window_controls.setSpacing(toolbar_row_spacing)
+        self.toolbar_window_controls.addStretch()
+        self.toolbar_stack_layout.addLayout(self.toolbar_window_controls)
+
+        self.toolbar_menu_row = QHBoxLayout()
+        self.toolbar_menu_row.setContentsMargins(0, 0, 0, 0)
+        self.toolbar_menu_row.setSpacing(max(6, toolbar_padding // 2))
+        self.toolbar_menu_row.addStretch()
+        self.toolbar_stack_layout.addLayout(self.toolbar_menu_row)
+
+        for control_type, label, tooltip, handler in (
+            ("minimize", "−", "Minimize", self.showMinimized),
+            ("maximize", "□", "Maximize / Restore", self._toggle_maximize_restore),
+            ("close", "×", "Close", self.close),
+        ):
+            button = QPushButton(label, self.toolbar_content)
+            button.setProperty("toolbarRole", "window-control")
+            button.setProperty("controlType", control_type)
+            button.setToolTip(tooltip)
+            button.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+            button.setText("")
+            button.setIconSize(QtCore.QSize(styles.titlebar_control_symbol_size + 2, styles.titlebar_control_symbol_size + 2))
+            button.clicked.connect(handler)
+            self.toolbar_window_controls.addWidget(button)
+            if control_type == "maximize":
+                self.maximize_button = button
+            else:
+                button.setIcon(
+                    self._toolbar_svg_icon(
+                        self.WINDOW_CONTROL_ICON_PATHS[control_type],
+                        "#000",
+                        styles.titlebar_control_symbol_size + 2,
+                    )
+                )
+
+        for action in self.menu.actions():
+            menu = action.menu()
+            if menu is not None:
+                self._add_app_toolbar_menu(menu)
+        self._update_toolbar_logo_pixmap()
+        self._update_maximize_button()
+        self.menu.hide()
+
+    def _add_app_toolbar_menu(self, menu: QMenu):
+        menu_id = id(menu)
+        if not hasattr(self, "_app_toolbar_menus") or menu_id in self._app_toolbar_menus:
+            return
+
+        button = QPushButton(self)
+        menu_label = menu.title().replace("&", "")
+        button.setText(f"{styles.toolbar_menu_icon_text_gap}{menu_label}")
+        button.setProperty("toolbarRole", "menu")
+        button.setIcon(self._toolbar_menu_icon(menu_label))
+        button.setIconSize(QtCore.QSize(16, 16))
+        if menu is self.log_menu:
+            button.clicked.connect(self.log_window_action.trigger)
+        else:
+            button.clicked.connect(
+                lambda _, b=button, m=menu: m.popup(b.mapToGlobal(QtCore.QPoint(0, b.height())))
+            )
+        button.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+        button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        self.toolbar_menu_row.addWidget(button)
+        self._app_toolbar_menus.add(menu_id)
+
+    def _toolbar_menu_icon(self, menu_label: str) -> QIcon:
+        icon_key = menu_label.strip().lower()
+        icon_path = self.TOOLBAR_MENU_ICON_PATHS.get(icon_key, "image/qlementine/toolbar_menu.svg")
+        return self._toolbar_svg_icon(icon_path, "#ffffff", 16)
+
+    def _toolbar_svg_icon(self, relative_path: str, color: str, size: int) -> QIcon:
+        icon_path = utils.get_resource_path(relative_path, prefer_root=True)
+        base_icon = QIcon(icon_path)
+        pixmap = base_icon.pixmap(QtCore.QSize(size, size))
+        if pixmap.isNull():
+            return base_icon
+
+        tinted = QPixmap(pixmap.size())
+        tinted.setDevicePixelRatio(pixmap.devicePixelRatio())
+        tinted.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(tinted)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(tinted.rect(), QColor(color))
+        painter.end()
+
+        return QIcon(tinted)
+
+    def _toggle_maximize_restore(self):
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+        self._update_maximize_button()
+
+    def _update_maximize_button(self):
+        if hasattr(self, "maximize_button"):
+            icon_name = "restore" if self.isMaximized() else "maximize"
+            self.maximize_button.setIcon(
+                self._toolbar_svg_icon(
+                    self.WINDOW_CONTROL_ICON_PATHS[icon_name],
+                    "#000",
+                    styles.titlebar_control_symbol_size + 2,
+                )
+            )
+
+    def _update_toolbar_logo_pixmap(self):
+        if not hasattr(self, "toolbar_content") or self._toolbar_logo_source is None:
+            return
+
+        target_height = max(24, self.toolbar_stack.sizeHint().height() * .6)
+        scaled_width = max(24, round(self._toolbar_logo_source.width() * target_height / self._toolbar_logo_source.height()))
+
+        content_margins = self.toolbar_content_layout.contentsMargins()
+        available_width = (
+            self.toolbar_content.width()
+            - content_margins.left()
+            - content_margins.right()
+            - self.toolbar_content_layout.spacing()
+            - self.toolbar_stack.minimumSizeHint().width()
+        )
+        if available_width > 0 and available_width < scaled_width:
+            scaled_width = max(24, available_width)
+            target_height = max(24, round(self._toolbar_logo_source.height() * scaled_width / self._toolbar_logo_source.width()))
+
+        toolbar_pixmap = self._toolbar_logo_source._scaled(scaled_width, target_height)
+        self.toolbar_logo.setPixmap(toolbar_pixmap)
+        self.toolbar_logo.setMaximumWidth(toolbar_pixmap.width())
+        self.toolbar_logo.setFixedHeight(toolbar_pixmap.height())
+
+    def _is_toolbar_drag_region(self, pos: QtCore.QPoint):
+        if not hasattr(self, "app_toolbar") or not self.app_toolbar.geometry().contains(pos):
+            return False
+
+        widget = self.childAt(pos)
+        if widget is None:
+            return True
+
+        if isinstance(widget, (QPushButton, QToolButton, QLineEdit, QComboBox)):
+            return False
+
+        return widget is self.toolbar_logo or self.toolbar_content.isAncestorOf(widget) or widget is self.toolbar_content
+
+    def _install_resize_event_filter(self):
+        if self._resize_event_filter_installed:
+            return
+
+        app = QApplication.instance()
+        if app is None:
+            return
+
+        app.installEventFilter(self)
+        self._resize_event_filter_installed = True
+        self._set_resize_mouse_tracking(self)
+
+    def _set_resize_mouse_tracking(self, root: QWidget):
+        root.setMouseTracking(True)
+        for child in root.findChildren(QWidget):
+            child.setMouseTracking(True)
+
+    def _event_local_pos(self, watched: QWidget, event):
+        global_position = getattr(event, "globalPosition", None)
+        if callable(global_position):
+            return self.mapFromGlobal(global_position().toPoint())
+
+        local_position = getattr(event, "position", None)
+        if callable(local_position):
+            return self.mapFromGlobal(watched.mapToGlobal(local_position().toPoint()))
+
+        return None
+
+    def _get_resize_edges(self, pos: QtCore.QPoint) -> QtCore.Qt.Edge:
+        if self.isMaximized() or self.isFullScreen():
+            return QtCore.Qt.Edge(0)
+
+        rect = self.rect()
+        border = self._resize_border
+        edges = QtCore.Qt.Edge(0)
+
+        if pos.x() <= border:
+            edges |= QtCore.Qt.Edge.LeftEdge
+        elif pos.x() >= rect.width() - border:
+            edges |= QtCore.Qt.Edge.RightEdge
+
+        if pos.y() <= border:
+            edges |= QtCore.Qt.Edge.TopEdge
+        elif pos.y() >= rect.height() - border:
+            edges |= QtCore.Qt.Edge.BottomEdge
+
+        return edges
+
+    def _cursor_for_resize_edges(self, edges: QtCore.Qt.Edge):
+        if edges in (QtCore.Qt.Edge.LeftEdge | QtCore.Qt.Edge.TopEdge, QtCore.Qt.Edge.RightEdge | QtCore.Qt.Edge.BottomEdge):
+            return QtCore.Qt.CursorShape.SizeFDiagCursor
+        if edges in (QtCore.Qt.Edge.RightEdge | QtCore.Qt.Edge.TopEdge, QtCore.Qt.Edge.LeftEdge | QtCore.Qt.Edge.BottomEdge):
+            return QtCore.Qt.CursorShape.SizeBDiagCursor
+        if edges in (QtCore.Qt.Edge.LeftEdge, QtCore.Qt.Edge.RightEdge):
+            return QtCore.Qt.CursorShape.SizeHorCursor
+        if edges in (QtCore.Qt.Edge.TopEdge, QtCore.Qt.Edge.BottomEdge):
+            return QtCore.Qt.CursorShape.SizeVerCursor
+        return None
+
+    def _update_resize_cursor(self, pos: QtCore.QPoint):
+        edges = self._get_resize_edges(pos)
+        cursor_shape = self._cursor_for_resize_edges(edges)
+        if cursor_shape is None:
+            self.unsetCursor()
+        else:
+            self.setCursor(QCursor(cursor_shape))
+        return edges
+
+    def _start_system_resize(self, edges: QtCore.Qt.Edge) -> bool:
+        if not edges or self.isMaximized() or self.isFullScreen():
+            return False
+
+        window_handle = self.windowHandle()
+        if window_handle is None:
+            return False
+
+        return window_handle.startSystemResize(edges)
+
+    def eventFilter(self, watched, event):
+        if isinstance(watched, QWidget) and (watched is self or self.isAncestorOf(watched)):
+            event_type = event.type()
+
+            if event_type == QtCore.QEvent.Type.MouseMove:
+                local_pos = self._event_local_pos(watched, event)
+                if local_pos is not None and not self._toolbar_drag_active:
+                    self._update_resize_cursor(local_pos)
+
+            elif event_type == QtCore.QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+                local_pos = self._event_local_pos(watched, event)
+                if local_pos is not None:
+                    resize_edges = self._get_resize_edges(local_pos)
+                    if resize_edges and self._start_system_resize(resize_edges):
+                        self._resize_edges = resize_edges
+                        event.accept()
+                        return True
+
+            elif event_type == QtCore.QEvent.Type.MouseButtonRelease:
+                self._resize_edges = QtCore.Qt.Edge(0)
+                local_pos = self._event_local_pos(watched, event)
+                if local_pos is not None and not self._toolbar_drag_active:
+                    self._update_resize_cursor(local_pos)
+
+        return super().eventFilter(watched, event)
+
+    def mousePressEvent(self, event):
+        pos = event.position().toPoint()
+        if event.button() == Qt.MouseButton.LeftButton:
+            resize_edges = self._get_resize_edges(pos)
+            if resize_edges and self._start_system_resize(resize_edges):
+                self._resize_edges = resize_edges
+                event.accept()
+                return
+        if event.button() == Qt.MouseButton.LeftButton and self._is_toolbar_drag_region(pos):
+            self._toolbar_drag_active = True
+            self._toolbar_drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        self._update_resize_cursor(event.position().toPoint())
+        if self._toolbar_drag_active and event.buttons() & Qt.MouseButton.LeftButton and not self.isMaximized():
+            self.move(event.globalPosition().toPoint() - self._toolbar_drag_offset)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._toolbar_drag_active = False
+        self._resize_edges = QtCore.Qt.Edge(0)
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._is_toolbar_drag_region(event.position().toPoint()):
+            self._toggle_maximize_restore()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_toolbar_logo_pixmap()
+        self._update_maximize_button()
+
+    def leaveEvent(self, event):
+        if not self._toolbar_drag_active:
+            self.unsetCursor()
+        super().leaveEvent(event)
 
     def get_active_buttons(self):
         input_data = HapticEffect.device.get_input()
@@ -1183,6 +1678,8 @@ class MainWindow(QMainWindow):
             custom_userconfig_action.triggered.connect(lambda: utils.load_custom_userconfig())
             debug_menu.addAction(custom_userconfig_action)
 
+        self._add_app_toolbar_menu(debug_menu)
+
     def set_scrollbar(self, pos):
         self.settings_area.verticalScrollBar().setValue(pos)
 
@@ -1192,6 +1689,7 @@ class MainWindow(QMainWindow):
         status = "ACTIVE" if connected else "DISCONNECTED"
         self.device_panel.set_device_status(G.device_type, status)
         self.status_container.set_joystick_connected(connected)
+        self._set_footer_joystick_connected(connected)
 
     @pyqtSlot(str, str)
     def update_child_status(self, device, status):
@@ -1239,8 +1737,8 @@ class MainWindow(QMainWindow):
 
         #self.devicetype_label.hide()
         current_title = self.windowTitle()
-        new_title = f"** MASTER INSTANCE ** {current_title}"
-        self.setWindowTitle(new_title)
+        # new_title = f"** MASTER INSTANCE ** {current_title}"
+        # self.setWindowTitle(new_title)
         # self.instance_status_row.show()
         # if "joystick" in G.launched_instances:
         #     self.instance_status_row.joystick_status_icon.show()
@@ -1320,32 +1818,30 @@ class MainWindow(QMainWindow):
         if vers == "uptodate":
             status_text = "Up To Date"
             self.update_action.setDisabled(True)
-            self.version_label.setText(f'Version Status: {status_text}')
+            logging.info("Version Status: %s", status_text)
         elif vers == "error":
             status_text = "UNKNOWN"
-            self.version_label.setText(f'Version Status: {status_text}')
+            logging.info("Version Status: %s", status_text)
         elif vers == 'dev':
             if is_exe:
-                self.version_label.setText('Version Status: <b>Development Build</b>')
+                logging.info("Version Status: Development Build")
             else:
-                self.version_label.setText('Version Status: <b>Development - Clean source</b>')
+                logging.info("Version Status: Development - Clean source")
 
         elif vers == 'needsupdate':
-            self.version_label.setText('Version Status: <b>Out of Date Source - Git pull needed</b>')
+            logging.info("Version Status: Out of Date Source - Git pull needed")
         
         elif vers == 'dirty':
-            self.version_label.setText('Version Status: <b>Development - Modified Source</b>')
+            logging.info("Version Status: Development - Modified Source")
 
         else:
             # print(_update_available)
             self._update_available = True
             logging.info(f"<<<<Update available - new version={vers}>>>>")
 
-            status_text = f"New version <a href='{url}'><b>{vers}</b></a> is available!"
             self.update_action.setDisabled(False)
             self.update_action.setText("Install Latest TelemFFB")
-            self.version_label.setToolTip(url)
-            self.version_label.setText(f'Version Status: {status_text}')
+            logging.info("Version Status: New version %s is available: %s", vers, url)
 
         self.perform_update(auto=True)
 
@@ -1438,10 +1934,13 @@ class MainWindow(QMainWindow):
             # reset the craft area text to default
             self.status_container.reset()
             self.settings_layout.reload_caller()
+            if self.telemetry_timed_out:
+                self._show_waiting_for_telemetry()
         else:
             # Entering offline editing mode
             G.settings_mgr.go_offline()
             self.status_container.set_offline("None")
+            self._show_settings_layout()
             # clear the layout in case an aircraft was previously loaded live
             G.main_window.settings_layout.clear_layout()
 
@@ -1463,9 +1962,6 @@ class MainWindow(QMainWindow):
             # build sim list
             sims = [''] + xmlutils.get_sims()
             self.offline_sim.addItems(sims)
-
-            # force the settings tab to be active
-            self.tab_widget.setCurrentIndex(1)
 
         if G.master_instance:
             # Show the offline mode widgets, but only for master instance
@@ -1664,6 +2160,7 @@ class MainWindow(QMainWindow):
         G.settings_mgr.current_class = self.offline_class.currentText()
         G.settings_mgr.current_aircraft_name = self.offline_name.currentText()
         G.settings_mgr.active_profile = self.offline_profile.currentText()
+        self._show_settings_layout()
         self.settings_layout.reload_caller()
 
 
@@ -1724,16 +2221,8 @@ class MainWindow(QMainWindow):
                     state = QtCore.QByteArray.fromBase64(window_data_dict['state'].encode())
                     self.restoreState(state)
                 
-                # Load tab settings
-                if G.system_settings.get('saveLastTab', True):
-                    tab = window_data_dict.get('Tab', 0)
-                    self.tab_sizes = window_data_dict.get('TabSizes', self.default_tab_sizes)
-                    self.tab_widget.setCurrentIndex(tab)
-                    self.switch_window_view(tab)
-                    
-                    h = self.tab_sizes[str(tab)]['height']
-                    w = self.tab_sizes[str(tab)]['width']
-                    self.resize(w, h)
+                status_drawer_open = window_data_dict.get('StatusDrawerOpen', True)
+                QTimer.singleShot(0, lambda open_drawer=status_drawer_open: self.set_status_drawer_open(open_drawer))
 
                 # Validate window position is on screen
                 if not self.is_valid_geometry(self.x(), self.y()):
@@ -1753,17 +2242,11 @@ class MainWindow(QMainWindow):
         # Convert geometry and state to base64 strings for storage
         geometry = self.saveGeometry().toBase64().data().decode()
         state = self.saveState().toBase64().data().decode()
-        
-        # Save current tab info
-        cur_index = self.tab_widget.currentIndex()
-        self.tab_sizes[str(cur_index)]['width'] = self.width()
-        self.tab_sizes[str(cur_index)]['height'] = self.height()
 
         window_dict = {
             'geometry': geometry,
             'state': state,
-            'Tab': cur_index,
-            'TabSizes': self.tab_sizes
+            'StatusDrawerOpen': self.status_drawer_thumb.isChecked()
         }
 
         settings.setValue(f"{device_type}/WindowData", json.dumps(window_dict))
@@ -1784,11 +2267,14 @@ class MainWindow(QMainWindow):
                 x_pos = 10
                 y_pos = 40
                 
-        self.setGeometry(x_pos, y_pos, 530, 700)
+        self.setGeometry(x_pos, y_pos, self.default_geometry_width, self.default_geometry_height)
+        self.set_status_drawer_open(True)
 
-    def open_system_settings_dialog(self):
+    def open_system_settings_dialog(self, show_simulator_setup=False):
         try:
             dialog = SystemSettingsDialog(self)
+            if show_simulator_setup:
+                dialog.show_simulator_setup_tab()
             dialog.raise_()
             dialog.activateWindow()
             dialog.show()
@@ -1880,34 +2366,6 @@ class MainWindow(QMainWindow):
 
 
 
-
-    def switch_window_view(self, index):
-        previous_index = self.current_tab_index
-        # Get window geometry and store as the geometry for the previous index for later recall
-        self.tab_sizes[str(previous_index)]['height'] = self.height()
-        self.tab_sizes[str(previous_index)]['width'] = self.width()
-
-        if index == 0:  # Monitor Tab
-            self.current_tab_index = 0
-            try:
-                h = self.tab_sizes[str(index)]['height']
-                w = self.tab_sizes[str(index)]['width']
-                self.resize(int(w), int(h))
-            except Exception: pass
-
-        elif index == 1:  # Settings Tab
-            self.current_tab_index = 1
-            try:
-                h = self.tab_sizes[str(index)]['height']
-                w = self.tab_sizes[str(index)]['width']
-                self.resize(int(w), int(h))
-            except Exception:
-                pass
-
-        elif index == 2:  # Hide Tab
-            self.current_tab_index = 2
-
-            self.resize(0, 0)
 
     def interpolate_color(self, color1, color2, value):
         # Ensure value is between 0 and 1
@@ -2030,11 +2488,13 @@ class MainWindow(QMainWindow):
             # Only set icon to pause if error condition is not present when pausing
             self.update_sim_indicators(G.telem_manager.getTelemValue('src'), paused=True)
         self.telemetry_timed_out = True
+        self._show_waiting_for_telemetry()
 
     def on_update_telemetry(self, datadict: dict):
         if utils.millis() - self.last_telemetry_refresh < 50:
             return
         self.last_telemetry_refresh = utils.millis()
+        self._show_settings_layout()
 
         data = OrderedDict(sorted(datadict.items()))  # Alphabetize telemetry data
         keys = data.keys()
@@ -2110,7 +2570,8 @@ class MainWindow(QMainWindow):
                 if child_effects:
                     G.ipc_instance.send_ipc_effects(active_effects, active_settings)
 
-            window_mode = self.tab_widget.currentIndex()
+            settings_visible = True
+            monitor_visible = True
             # update slider colors
             pct_max_a = data.get('_pct_max_a', 0)
             pct_max_e = data.get('_pct_max_e', 0)
@@ -2118,7 +2579,7 @@ class MainWindow(QMainWindow):
             pct_steer_f = data.get('_pct_steer_f', 0)
             qcolor_green = QColor("#17c411")
             qcolor_grey = QColor("grey")
-            if window_mode == 1:
+            if settings_visible:
                 sliders = self.findChildren(NoWheelSlider)
                 for my_slider in sliders:
                     slidername = my_slider.objectName().replace('sld_', '')
@@ -2129,7 +2590,7 @@ class MainWindow(QMainWindow):
                             my_slider.setHandleColor("#17c411")
                             break
                         else:
-                            my_slider.setHandleColor(zBlue)
+                            my_slider.setHandleColor(colorPrimary)
                     my_slider.blockSignals(False)
 
                 n_sliders = self.findChildren(NoWheelNumberSlider)
@@ -2168,7 +2629,7 @@ class MainWindow(QMainWindow):
                             my_slider.setHandleColor("#17c411")
                             break
                         else:
-                            my_slider.setHandleColor(zBlue)
+                            my_slider.setHandleColor(colorPrimary)
                     my_slider.blockSignals(False)
 
             is_paused = max(data.get('SimPaused', 0), data.get('Parked', 0))
@@ -2229,7 +2690,7 @@ class MainWindow(QMainWindow):
 
             self.update_craft_text_block(pattern=shown_pattern, profile=active_profile)
 
-            if window_mode == 0:
+            if monitor_visible:
                 self.lbl_telem_data.setText(telem_items)
                 self.lbl_effects_data.setText(active_effects)
 
@@ -2302,6 +2763,3 @@ class MainWindow(QMainWindow):
                     return True
 
         return False
-
-
-

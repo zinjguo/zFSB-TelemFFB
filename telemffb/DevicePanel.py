@@ -4,7 +4,7 @@ import sys
 
 
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QTimer, QPropertyAnimation, QRect, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QPixmap, QEnterEvent, QPainter, QColor, QFont, QPainterPath
+from PyQt6.QtGui import QPixmap, QEnterEvent, QPainter, QColor, QPainterPath
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout,
     QHBoxLayout, QMainWindow, QSizePolicy, QGraphicsOpacityEffect
@@ -24,7 +24,7 @@ DEVICE_ICONS = {
 }
 
 STATUS_COLORS = {
-    "normal": QColor(styles.zBlue),
+    "normal": QColor(styles.colorPrimary),
     "ok": QColor(0, 153, 76, 220),         # green
     "warning": QColor(204, 153, 0, 220),   # amber
     "error": QColor(204, 51, 51, 255),     # red
@@ -33,7 +33,7 @@ STATUS_COLORS = {
 }
 
 STATUS_COLORS_DARK = {
-    "normal": QColor(styles.zBlue),
+    "normal": QColor(styles.colorPrimary),
     "ok": QColor(0, 204, 102, 200),
     "warning": QColor(255, 204, 0, 200),
     "error": QColor(255, 77, 77, 255),
@@ -83,8 +83,8 @@ class DeviceIconWidget(QWidget):
         # Text
         self.text_label = QLabel(self.device_name.capitalize(), self)
         self.text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.text_label.setFont(QFont("Top Secret", 12))
-        self.text_label.setStyleSheet(f"color: {styles.zBlue};")
+        self.text_label.setFont(styles.app_font(12))
+        self.text_label.setStyleSheet(f"color: {styles.colorPrimary};")
 
         self.opacity_effect = QGraphicsOpacityEffect()
         self.text_label.setGraphicsEffect(self.opacity_effect)
@@ -382,14 +382,14 @@ if __name__ == "__main__":
     from PyQt6 import QtGui
     app = QApplication(sys.argv)
     app.setStyle('fusion')  # Set Fusion style
-    app.setFont(QFont('Segoe UI', 10))
+    app.setFont(styles.app_font(10))
     def _setup_theme_and_styling(app):
         """Configure the standalone demo with the same dark-only theme."""
         app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
 
         # Create and set custom palette with accent color
         palette = app.palette()
-        accent_color = QtGui.QColor(styles.zBlue)
+        accent_color = QtGui.QColor(styles.colorPrimary)
         palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent_color)
         palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor('white'))
         palette.setColor(QtGui.QPalette.ColorRole.Link, accent_color)

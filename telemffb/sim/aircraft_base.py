@@ -336,6 +336,7 @@ class AircraftBase(object):
         self.spring_adjuster_x = FFBReport_SetCondition(parameterBlockOffset=0)
         self.spring_adjuster_y = FFBReport_SetCondition(parameterBlockOffset=1)
         self.spring_adjuster = effects['spring_adjuster'].spring_adjuster()
+        self._spring_adjuster_restart_pending = False
         self.offset_adjuster_x = FFBReport_SetCondition(parameterBlockOffset=0)
         self.offset_adjuster_y = FFBReport_SetCondition(parameterBlockOffset=1)
         self.offset_adjuster = effects['offset_adjuster'].spring_adjuster()
@@ -1353,7 +1354,8 @@ class AircraftBase(object):
 
     def ac_update_wind_effect(self, telem_data):
         if not self.is_joystick(): return
-        if not self.wind_effect_enabled:
+        from telemffb.SettingsLayout import SettingsLayout
+        if "wind_effect_enabled" in SettingsLayout.HIDDEN_SECTION_NAMES or not self.wind_effect_enabled:
             effects.dispose("wnd")
             return
 
@@ -1365,7 +1367,7 @@ class AircraftBase(object):
         v = utils.clamp(v, 0, self.wind_effect_max_intensity)
         v = utils.clamp(v*self.wind_effect_scaling, 0.0,1.0)
         if v == 0:
-            effects.dispose("wind")
+            effects.dispose("wnd")
             return
         logging.debug(f"Adding wind effect intensity:{v}")
         effects["wnd"].constant(v, utils.RandomDirectionModulator, 5).start()
@@ -1375,6 +1377,7 @@ class AircraftBase(object):
         telem_data['_hyd_factor'] = self.hydraulic_factor
 
         if not self.enable_hydraulic_loss_effect:
+            effects.dispose("hyd_loss_damper", "hyd_loss_inertia", "hyd_loss_friction")
             return False
         hydraulic_sys = telem_data.get('HydSys', "n/a")
         hydraulic_pressure = telem_data.get('HydPress', 1)
@@ -2023,10 +2026,11 @@ class AircraftBase(object):
         self.telem_data['_ovrd_spr_trim_pos'] = [round(self.override_spring_cp0_x), round(self.override_spring_cp0_y), self.g_y_offset]
         self.spring_adjuster_y.set_offset(round(self.override_spring_cp0_y + self.g_y_offset))
         self.spring_adjuster_x.set_offset(round(self.override_spring_cp0_x))
-
+ 
         self.spring_adjuster.setCondition(self.spring_adjuster_y)
         self.spring_adjuster.setCondition(self.spring_adjuster_x)
-        self.spring_adjuster.start()
+        self.spring_adjuster.start(force=self._spring_adjuster_restart_pending)
+        self._spring_adjuster_restart_pending = False
 
     def ac_set_deadzone(self):
         if not self.enable_deadzone and self.deadzone_active:

@@ -1243,7 +1243,7 @@ class Aircraft(AircraftBase):
         if not getattr(self, "_socket", None):
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
         self.toggle_xp_control()
-        self._socket.sendto(bytes(cmd, "utf-8"), ("127.0.0.1", 34391))
+        self._socket.sendto(bytes(cmd, "utf-8"), ("127.0.0.1", utils.DEFAULT_XPLANE_COMMAND_PORT))
 
     def toggle_xp_control(self):
         if self.telem_data.get('FFBType', '') == 'collective':
@@ -1261,19 +1261,19 @@ class Aircraft(AircraftBase):
             # we don't want to send the "prop pitch" override (collective) to XPLANE if we are not in a helo
             if self.telem_data.get("cOvrd", 1):
                 sendstr = f"OVERRIDE:{self.telem_data['FFBType']}=false"
-                self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", 34391))
+                self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", utils.DEFAULT_XPLANE_COMMAND_PORT))
                 logging.info(f"Sending to XPLANE: >>{sendstr}<<")
                 self.xplane_axis_override_active = False
             return
 
         if self.telemffb_controls_axes and not self.local_disable_axis_control and not self.xplane_axis_override_active:
             sendstr = f"OVERRIDE:{self.telem_data['FFBType']}=true"
-            self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", 34391))
+            self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", utils.DEFAULT_XPLANE_COMMAND_PORT))
             logging.info(f"Sending to XPLANE: >>{sendstr}<<")
             self.xplane_axis_override_active = True
         elif self.xplane_axis_override_active and not self.telemffb_controls_axes:
             sendstr = f"OVERRIDE:{self.telem_data['FFBType']}=false"
-            self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", 34391))
+            self._socket.sendto(bytes(sendstr, "utf-8"), ("127.0.0.1", utils.DEFAULT_XPLANE_COMMAND_PORT))
             logging.info(f"Sending to XPLANE: >>{sendstr}<<")
             self.xplane_axis_override_active = False
 

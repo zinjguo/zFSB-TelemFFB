@@ -1,8 +1,9 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QScrollArea
-from PyQt6.QtGui import QPainter, QPen, QLinearGradient, QColor, QFont
+from PyQt6.QtGui import QPainter, QPen, QLinearGradient, QColor
 from PyQt6.QtCore import Qt, QPointF, QTimer
 import random
+import styles
 
 class FrameTimeWidget(QWidget):
     def __init__(self, parent=None):
@@ -56,8 +57,8 @@ class FrameTimeWidget(QWidget):
         pen = QPen(Qt.GlobalColor.black)
         painter.setPen(pen)
 
-        font = QFont("Courier New", 8)
-        font.setBold(1)  # Example: Arial font, size 10
+        font = styles.app_font(8)
+        font.setBold(1)
         painter.setFont(font)
 
         max_ = max(self.frame_times)

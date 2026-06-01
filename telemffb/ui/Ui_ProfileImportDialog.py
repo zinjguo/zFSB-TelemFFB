@@ -7,6 +7,7 @@
 
 
 from PyQt6 import QtCore, QtGui, QtWidgets
+import styles
 
 
 class Ui_ProfileImportDialog(object):
@@ -14,8 +15,7 @@ class Ui_ProfileImportDialog(object):
         ProfileImportDialog.setObjectName("ProfileImportDialog")
         ProfileImportDialog.resize(910, 730)
         ProfileImportDialog.setMinimumSize(QtCore.QSize(910, 730))
-        font = QtGui.QFont()
-        font.setFamily("Segoe UI")
+        font = styles.apply_font_family(QtGui.QFont())
         ProfileImportDialog.setFont(font)
         self.gridLayout = QtWidgets.QGridLayout(ProfileImportDialog)
         self.gridLayout.setObjectName("gridLayout")
@@ -38,8 +38,7 @@ class Ui_ProfileImportDialog(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.tw_detectedModels.sizePolicy().hasHeightForWidth())
         self.tw_detectedModels.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
-        font.setFamily("Segoe UI")
+        font = styles.apply_font_family(QtGui.QFont())
         self.tw_detectedModels.setFont(font)
         self.tw_detectedModels.setColumnCount(0)
         self.tw_detectedModels.setObjectName("tw_detectedModels")
@@ -62,8 +61,7 @@ class Ui_ProfileImportDialog(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.tw_detectedOverrides.sizePolicy().hasHeightForWidth())
         self.tw_detectedOverrides.setSizePolicy(sizePolicy)
-        font = QtGui.QFont()
-        font.setFamily("Segoe UI")
+        font = styles.apply_font_family(QtGui.QFont())
         self.tw_detectedOverrides.setFont(font)
         self.tw_detectedOverrides.setColumnCount(0)
         self.tw_detectedOverrides.setObjectName("tw_detectedOverrides")

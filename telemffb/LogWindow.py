@@ -18,8 +18,9 @@
 
 
 import telemffb.globals as G
+import styles
 
-from PyQt6.QtGui import QFont, QAction
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QHBoxLayout, QMainWindow, QPlainTextEdit, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget
 from PyQt6.QtCore import QSettings
 import logging
@@ -40,10 +41,7 @@ class LogWindow(QMainWindow):
         self.widget = QPlainTextEdit(self.central_widget)
         self.widget.setMaximumBlockCount(20000)
         self.widget.setReadOnly(True)
-        font = QFont("Cascadia mono", 10)
-        font.setFamilies(["Cascadia Mono", "Courier New"])
-
-        self.widget.setFont(font)
+        self.widget.setFont(styles.app_font(10))
 
         layout = QVBoxLayout(self.central_widget)
         layout.addWidget(self.widget)

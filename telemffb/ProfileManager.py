@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import QDialog, QMessageBox, QTreeWidgetItem, QHeaderView, 
     QRadioButton, QButtonGroup, QApplication, QListWidget, QListWidgetItem, QTableWidget, QAbstractItemView
 
 import telemffb.globals as G
+import styles
 from telemffb import utils
 from telemffb.ui.Ui_ProfileManagerDialog import Ui_ProfileManagerDialog
 from telemffb.ProfileImportDialog import ProfileImportDialog
@@ -52,6 +53,7 @@ class ProfileManagerDialog(QDialog, Ui_ProfileManagerDialog):
 
         self.setupUi(self)
         self.retranslateUi(self)
+        self.apply_layout_padding()
         self.first_init = True
         self.current_ac = G.settings_mgr.current_pattern
         self.setWindowTitle(f"Profile Manager - Active Aircraft: {self.current_ac}")
@@ -118,6 +120,30 @@ class ProfileManagerDialog(QDialog, Ui_ProfileManagerDialog):
         self.cb_inactive.toggled.connect(self.apply_all_filters)
 
         self.start_tree_population()
+
+    def apply_layout_padding(self):
+        dialog_padding = styles.default_container_padding
+        control_spacing = max(styles.advanced_spring_control_spacing, dialog_padding // 2)
+        section_spacing = max(styles.advanced_spring_section_spacing, dialog_padding)
+
+        self.gridLayout_2.setContentsMargins(
+            dialog_padding,
+            dialog_padding,
+            dialog_padding,
+            dialog_padding,
+        )
+        self.gridLayout_2.setHorizontalSpacing(section_spacing)
+        self.gridLayout_2.setVerticalSpacing(section_spacing)
+
+        self.verticalLayout.setSpacing(control_spacing)
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout.setSpacing(control_spacing)
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout_2.setSpacing(control_spacing)
+        self.horizontalLayout_3.setSpacing(control_spacing)
+        self.gridLayout.setHorizontalSpacing(control_spacing)
+        self.gridLayout.setVerticalSpacing(control_spacing)
+        self.line.hide()
 
     def start_tree_population(self):
         """

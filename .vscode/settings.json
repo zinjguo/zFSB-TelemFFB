@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^& \"d:/Git Projects/zFSB-TelemFFB/\\.venv/Scripts/python\\.exe\" main\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python main\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

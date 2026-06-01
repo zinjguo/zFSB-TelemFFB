@@ -28,3 +28,8 @@ Use dev_guidelines.md for coding style and additional architecture notes.
 
 - Joystick firmware code may live in a separate repo.
 - The code can be found above this repo (../zFSB2)
+
+
+## Styles for UI elements (styles.py)
+Whenever possible, centralize all the UI style defintions to styles.py
+Use the variables and functions found in styles.py

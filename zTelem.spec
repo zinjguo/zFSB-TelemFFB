@@ -11,7 +11,7 @@ print(distpath)
 a = Analysis(
     ['main.py'],
     pathex=[],
-    binaries=[('xplane-plugin/TelemFFB-XPP/64/win.xpl', 'xplane-plugin/TelemFFB-XPP/64'), ('dll/hidapi.dll', '.'), ('simconnect/simconnect.dll', 'simconnect')],
+    binaries=[('xplane-plugin/src/zTelem-XPP/64/win.xpl', 'xplane-plugin/zTelem-XPP/64'), ('dll/hidapi.dll', '.'), ('simconnect/simconnect.dll', 'simconnect')],
     datas=[('export/*', 'export'), ('defaults.xml', '.'),  ('config.ini', '.'), ('simconnect/*.json', 'simconnect'), ('image/*', 'image'), ('_RELEASE_NOTES.txt', '.')],
     hiddenimports=[
         'numpy._core._exceptions',
@@ -107,7 +107,7 @@ exe = EXE(
     [],
 	exclude_binaries=True,
     name='zTelem',
-    icon='image/vpforceicon.ico',
+    icon='image/favicon.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

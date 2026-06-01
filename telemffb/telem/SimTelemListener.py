@@ -199,7 +199,7 @@ class SimXPLANE(SimTelemListener):
         if not self.is_enabled:
             return
 
-        self.telem = NetworkThread(G.telem_manager, host='127.0.0.1', port=34390)
+        self.telem = NetworkThread(G.telem_manager, host='127.0.0.1', port=utils.DEFAULT_XPLANE_TELEM_PORT)
 
         self.do_validate()
         logging.info("Starting XPlane Telemetry Listener")

@@ -168,6 +168,9 @@ class TelemManager(QObject, threading.Thread):
                     logging.debug(f"Ignoring blank setting from Settings Manager: {k} : {vu}")
                 # print(f"SETTING:\n{setting}")
             params = utils.sanitize_dict(params)
+            from telemffb.SettingsLayout import SettingsLayout
+            disabled_settings = SettingsLayout.disabled_hidden_settings(result)
+            params.update(utils.sanitize_dict(disabled_settings))
 
             G.settings_mgr.update_state_vars(
                 current_sim=the_sim,

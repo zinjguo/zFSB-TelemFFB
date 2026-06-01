@@ -8,6 +8,8 @@
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+import styles
+
 
 class Ui_AdvancedSpringDialog(object):
     def setupUi(self, AdvancedSpringDialog):
@@ -131,10 +133,7 @@ class Ui_AdvancedSpringDialog(object):
         self.horizontalLayout_3.addWidget(self.pb_saveclose)
         self.gridLayout.addLayout(self.horizontalLayout_3, 7, 1, 1, 1)
         self.lab_y = QtWidgets.QLabel(parent=AdvancedSpringDialog)
-        font = QtGui.QFont()
-        font.setFamily("Artifakt Element Heavy")
-        font.setPointSize(22)
-        font.setBold(True)
+        font = styles.app_font(22, QtGui.QFont.Weight.Bold)
         self.lab_y.setFont(font)
         self.lab_y.setObjectName("lab_y")
         self.gridLayout.addWidget(self.lab_y, 3, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
@@ -250,10 +249,7 @@ class Ui_AdvancedSpringDialog(object):
         self.verticalLayout_2.addWidget(self.curve_x)
         self.gridLayout.addWidget(self.frame, 1, 1, 1, 1)
         self.lab_x = QtWidgets.QLabel(parent=AdvancedSpringDialog)
-        font = QtGui.QFont()
-        font.setFamily("Artifakt Element Heavy")
-        font.setPointSize(22)
-        font.setBold(True)
+        font = styles.app_font(22, QtGui.QFont.Weight.Bold)
         self.lab_x.setFont(font)
         self.lab_x.setObjectName("lab_x")
         self.gridLayout.addWidget(self.lab_x, 1, 0, 1, 1, QtCore.Qt.AlignmentFlag.AlignHCenter)
@@ -295,7 +291,7 @@ class Ui_AdvancedSpringDialog(object):
         self.pb_revert.setText(_translate("AdvancedSpringDialog", "Revert"))
         self.pb_apply.setText(_translate("AdvancedSpringDialog", "Apply"))
         self.pb_saveclose.setText(_translate("AdvancedSpringDialog", "Save && Close"))
-        self.lab_y.setText(_translate("AdvancedSpringDialog", "<html><head/><body><p><span style=\" color:#ab37c8;\">Y</span></p></body></html>"))
+        self.lab_y.setText(_translate("AdvancedSpringDialog", f"<html><head/><body><p><span style=\" color:{styles.colorPrimary};\">Y</span></p></body></html>"))
         self.label_2.setText(_translate("AdvancedSpringDialog", "Airspeed Range:"))
         self.pb_airspeed_neg_hundred.setText(_translate("AdvancedSpringDialog", "LL"))
         self.pb_airspeed_neg_ten.setText(_translate("AdvancedSpringDialog", "L"))
@@ -308,7 +304,7 @@ class Ui_AdvancedSpringDialog(object):
         self.pb_x_reset.setText(_translate("AdvancedSpringDialog", "  Reset  "))
         self.lab_x_gain_label.setText(_translate("AdvancedSpringDialog", "X Axis Max Force:"))
         self.lab_x_mastergain.setText(_translate("AdvancedSpringDialog", "%0"))
-        self.lab_x.setText(_translate("AdvancedSpringDialog", "<html><head/><body><p><span style=\" color:#ab37c8;\">X</span></p></body></html>"))
+        self.lab_x.setText(_translate("AdvancedSpringDialog", f"<html><head/><body><p><span style=\" color:{styles.colorPrimary};\">X</span></p></body></html>"))
         self.tog_live_view.setText(_translate("AdvancedSpringDialog", "Live View"))
         self.pb_import.setText(_translate("AdvancedSpringDialog", "Import"))
         self.pb_export.setText(_translate("AdvancedSpringDialog", "Export"))

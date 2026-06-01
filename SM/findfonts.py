@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QFontDatabase, QFont
 from PyQt6.QtCore import Qt
 
+import styles
+
 
 class FontPreview(QWidget):
     def __init__(self):
@@ -38,7 +40,7 @@ class FontPreview(QWidget):
             row = QHBoxLayout()
 
             font_name_label = QLabel(font_family)
-            font_name_label.setFont(QFont("Arial", 12))
+            font_name_label.setFont(styles.app_font(12))
             font_name_label.setFixedWidth(200)
             font_name_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 

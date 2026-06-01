@@ -77,6 +77,10 @@ import telemffb.winpaths as winpaths
 import telemffb.xmlutils as xmlutils
 from .namedmutex import NamedMutex
 
+DEFAULT_IL2_TELEM_PORT = 34386
+DEFAULT_XPLANE_TELEM_PORT = 34392
+DEFAULT_XPLANE_COMMAND_PORT = 34393
+
 def check_min_firmware_version(dev_firmware_version, min_firmware_version):
     """Check if device firmware version meets minimum requirements."""
     minver = re.sub(r'\D', '', min_firmware_version)
@@ -574,7 +578,7 @@ class SystemSettings(QSettings):
         'focus_pauseIL2': True,
         'validateDCS': True,
         'pathIL2': 'C:/Program Files/IL-2 Sturmovik Great Battles',
-        'portIL2': 34385,
+        'portIL2': DEFAULT_IL2_TELEM_PORT,
         'enableBMS': False,
         'masterInstance': 1,
         'autolaunchMaster': False,
@@ -1181,7 +1185,10 @@ class Teleplot:
 teleplot = Teleplot()
 
 
-def analyze_il2_config(path, port=34385, window=None):
+def analyze_il2_config(path, port=None, window=None):
+    if port is None:
+        port = DEFAULT_IL2_TELEM_PORT
+
     config_data = defaultdict(dict)
     file_path = os.path.join(path, "data\\startup.cfg")
     if not os.path.exists(file_path):
@@ -1225,96 +1232,73 @@ def analyze_il2_config(path, port=34385, window=None):
         elif current_section and '=' in line:
             key, value = map(str.strip, line.split('=', 1))
             config_data[current_section][key] = value
-    telem_match = 0
-    telem_exists = 0
-    if "telemetrydevice" not in config_data:
-        # no telemetry config exists in current config, so add our own canned config
-        telem_proposed = telemetry_reference
-    else:
-        # there is an existing telemetry config
-        telem_match = 1
-        telem_exists = 1
-        ignore_port = False
-        telem_config = config_data["telemetrydevice"]
-        telem_proposed = {}
-        for k, v in telem_config.items():  # strip out any quotes
-            telem_proposed[k] = v.strip("\'\"")
-            telem_config[k] = v.strip("\'\"")
+    def _normalize_section(section):
+        normalized = {}
+        for k, v in section.items():
+            normalized[k] = str(v).strip("\'\"")
+        return normalized
 
-        for k, v in telem_proposed.items():  # see if it matches our reference
-            ref_v = telemetry_reference.get(k, 'null')
-            if v != ref_v:
-                if k == 'addr':
-                    # the address is different, check if the addr1 attribute is present and matches
-                    cur_addr1 = telem_proposed.get("addr1", "null")
-                    if cur_addr1 != ref_addr1:
-                        if "addr1" in telem_proposed:
-                            telem_proposed["addr1"] = ref_addr1
-                        else:
-                            # insert our addr1 value after the existing addr value
-                            telem_proposed = insert_dict_item(telem_proposed, 'addr1', ref_addr1, 'addr', before=False)
-                            # since we are adding ourselves as a secondary receiver, we can ignore the existing port value
-                        telem_match = 0
-                    ignore_port = True
-                if k == 'port' and not ignore_port:
-                    if telem_proposed[k] != ref_port:
-                        telem_proposed["port"] = ref_port
-                        telem_match = 0
-                if k == 'decimation':
-                    if telem_proposed[k] != ref_decimation:
-                        # we must set decimation to 1 for proper effect behavior
-                        telem_proposed = insert_dict_item(telem_proposed, 'decimation', f'1', 'enable', before=True)
-                        telem_match = 0
-                if k == 'enable':
-                    if telem_proposed[k] != ref_enable:
-                        # enable must be true
-                        telem_proposed = insert_dict_item(telem_proposed, 'enable', f'true', 'port', before=True)
-                        telem_match = 0
-    motion_match = 0
-    motion_exists = 0
-    if "motiondevice" not in config_data:
-        # no telemetry config exists in current config, so add our own canned config
-        motion_proposed = motion_reference
-    else:
-        # there is an existing telemetry config
-        motion_match = 1
-        motion_exists = 1
-        ignore_port = False
-        motion_config = config_data["motiondevice"]
-        motion_proposed = {}
-        for k, v in motion_config.items():  # strip out any quotes
-            motion_proposed[k] = v.strip("\'\"")
-            motion_config[k] = v.strip("\'\"")
+    def _has_receiver(section):
+        if section.get('addr') == ref_addr and section.get('port') == ref_port:
+            return True
+        return any(
+            key.startswith('addr') and key != 'addr' and value == ref_addr1
+            for key, value in section.items()
+        )
 
-        for k, v in motion_proposed.items():  # see if it matches our reference
-            ref_v = motion_reference.get(k, 'null')
-            if v != ref_v:
-                if k == 'addr':
-                    # the address is different, check if the addr1 attribute is present and matches
-                    cur_addr1 = motion_proposed.get("addr1", "null")
-                    if cur_addr1 != ref_addr1:
-                        if "addr1" in motion_proposed:
-                            motion_proposed["addr1"] = ref_addr1
-                        else:
-                            # insert our addr1 value after the existing addr value
-                            motion_proposed = insert_dict_item(motion_proposed, 'addr1', ref_addr1, 'addr',
-                                                               before=False)
-                            # since we are adding ourselves as a secondary receiver, we can ignore the existing port value
-                        motion_match = 0
-                    ignore_port = True
-                if k == 'port' and not ignore_port:
-                    if motion_proposed[k] != ref_port:
-                        motion_proposed["port"] = ref_port
-                        motion_match = 0
-                if k == 'decimation':
-                    if motion_proposed[k] != ref_decimation:
-                        motion_proposed = insert_dict_item(motion_proposed, 'decimation', f'1', 'enable', before=True)
-                        motion_match = 0
-                if k == 'enable':
-                    # enable must be true
-                    if motion_proposed[k] != ref_enable:
-                        motion_proposed = insert_dict_item(motion_proposed, 'enable', f'true', 'port', before=True)
-                        motion_match = 0
+    def _next_secondary_addr_key(section):
+        used_indices = []
+        for key in section:
+            match = re.fullmatch(r'addr(\d+)', key)
+            if match:
+                used_indices.append(int(match.group(1)))
+
+        next_index = 1
+        while next_index in used_indices:
+            next_index += 1
+        return f'addr{next_index}'
+
+    def _ensure_il2_receiver(section_name, reference):
+        existing = config_data.get(section_name)
+        if existing is None:
+            return None, dict(reference), False, False
+
+        current = _normalize_section(existing)
+        proposed = dict(current)
+        changed = False
+
+        if proposed.get('enable') != ref_enable:
+            if 'enable' in proposed:
+                proposed['enable'] = ref_enable
+            else:
+                proposed = insert_dict_item(proposed, 'enable', ref_enable, 'port', before=True)
+            changed = True
+
+        if proposed.get('decimation') != ref_decimation:
+            # Decimation must be 1 for responsive effects, regardless of which receiver owns the primary port.
+            if 'decimation' in proposed:
+                proposed['decimation'] = ref_decimation
+            else:
+                proposed = insert_dict_item(proposed, 'decimation', ref_decimation, 'enable', before=True)
+            changed = True
+
+        if not _has_receiver(proposed):
+            if not proposed.get('addr'):
+                proposed = insert_dict_item(proposed, 'addr', ref_addr, 'port', before=True)
+                proposed['port'] = ref_port
+            else:
+                addr_key = _next_secondary_addr_key(proposed)
+                proposed = insert_dict_item(proposed, addr_key, ref_addr1, 'addr', before=False)
+            changed = True
+
+        return current, proposed, not changed, True
+
+    telem_config, telem_proposed, telem_match, telem_exists = _ensure_il2_receiver(
+        "telemetrydevice", telemetry_reference
+    )
+    motion_config, motion_proposed, motion_match, motion_exists = _ensure_il2_receiver(
+        "motiondevice", motion_reference
+    )
 
     if telem_match and motion_match:
         return
@@ -1380,8 +1364,8 @@ def write_il2_config(file_path, config_data):
 
 
 def install_xplane_plugin(path, window):
-    src_path = get_resource_path('xplane-plugin/TelemFFB-XPP/64/win.xpl', prefer_root=True)
-    dst_path = os.path.join(path, 'resources', 'plugins', 'TelemFFB-XPP', '64', 'win.xpl')
+    src_path = get_resource_path('xplane-plugin/src/zTelem-XPP/64/win.xpl', prefer_root=True)
+    dst_path = os.path.join(path, 'resources', 'plugins', 'zTelem-XPP', '64', 'win.xpl')
 
     ans = QMessageBox.StandardButton.No
     if not os.path.exists(dst_path):

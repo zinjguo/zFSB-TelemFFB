@@ -129,14 +129,16 @@ class Aircraft(AircraftBase):
         self.gun_is_firing = 0
         self.gun_is_firing_dict = {}
         #clear any existing effects
+        effects.clear()
         self.spring = effects["spring"].spring()
         # self.damper = effects["damper"].damper()
         self.spring_x = FFBReport_SetCondition(parameterBlockOffset=0)
         self.spring_y = FFBReport_SetCondition(parameterBlockOffset=1)
-        for e in effects.values(): e.destroy()
-        effects.clear()
+        self.spring_adjuster_x = FFBReport_SetCondition(parameterBlockOffset=0)
+        self.spring_adjuster_y = FFBReport_SetCondition(parameterBlockOffset=1)
+        self.spring_adjuster = effects['spring_adjuster'].spring_adjuster()
 
-        self.sprin_mode = self.SpringModeEnum.NONE.name
+        self.spring_mode = self.SpringModeEnum.NONE.name
 
         # self.spring = HapticEffect().spring()
         # self.spring_x = FFBReport_SetCondition(parameterBlockOffset=0)
@@ -253,7 +255,10 @@ class Aircraft(AircraftBase):
             G.telem_manager.telemetryTimeout.emit(True)
             return
         
+        resume_from_pause = self.stop_state
         self.stop_state = False
+        if resume_from_pause:
+            self._spring_adjuster_restart_pending = True
 
         if telem_data["AircraftClass"] == "unknown":
             telem_data["AircraftClass"] = "GenericAircraft" #inject aircraft class into telemetry

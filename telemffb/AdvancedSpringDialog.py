@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import QDialog, QMessageBox, QComboBox, QInputDialog, QFile
 import inspect
 
 import telemffb.globals as G
+import styles
 from telemffb import utils
 from telemffb.ui.Ui_AdvancedSpring import Ui_AdvancedSpringDialog
 from telemffb.utils import get_gain_from_speed
@@ -65,6 +66,7 @@ class AdvancedSpringDialog(QDialog, Ui_AdvancedSpringDialog):
 
         self.setupUi(self)
         self.retranslateUi(self)
+        self.apply_layout_spacing()
         self.setWindowTitle(f"Advanced Spring Configuration ({self.device_type.capitalize()})")
         self.setWindowFlags(self.windowFlags() & ~QtCore.Qt.WindowType.WindowContextHelpButtonHint)
 
@@ -178,6 +180,36 @@ class AdvancedSpringDialog(QDialog, Ui_AdvancedSpringDialog):
         self.pb_get_vne.setMenu(self.create_option_menu())
 
         self.pb_get_vne.clicked.connect(self.pb_get_vne.showMenu)
+
+    def apply_layout_spacing(self):
+        page_padding = styles.advanced_spring_dialog_padding
+        section_spacing = styles.advanced_spring_section_spacing
+        control_spacing = styles.advanced_spring_control_spacing
+
+        self.gridLayout_2.setContentsMargins(page_padding, page_padding, page_padding, page_padding)
+        self.gridLayout_2.setVerticalSpacing(section_spacing)
+        self.gridLayout.setHorizontalSpacing(section_spacing)
+        self.gridLayout.setVerticalSpacing(section_spacing)
+
+        for frame_layout in (self.verticalLayout_2, self.verticalLayout_3):
+            frame_layout.setContentsMargins(control_spacing, control_spacing, control_spacing, control_spacing)
+            frame_layout.setSpacing(control_spacing)
+
+        for gain_layout in (self.gridLayout_4, self.gridLayout_6):
+            gain_layout.setHorizontalSpacing(control_spacing)
+            gain_layout.setVerticalSpacing(control_spacing)
+
+        for row_layout in (
+            self.horizontalLayout,
+            self.horizontalLayout_2,
+            self.horizontalLayout_3,
+            self.horizontalLayout_5,
+            self.horizontalLayout_6,
+            self.horizontalLayout_7,
+        ):
+            row_layout.setSpacing(control_spacing)
+
+        self.gridLayout_3.setHorizontalSpacing(control_spacing)
 
     def create_option_menu(self):
         menu = QMenu(self)

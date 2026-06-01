@@ -564,7 +564,7 @@ def log_il2_trace():
     import base64
 
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, 0)
-    s.bind(("", 34385))
+    s.bind(("", utils.DEFAULT_IL2_TELEM_PORT))
     s.settimeout(1)
 
     il2 = IL2Manager()

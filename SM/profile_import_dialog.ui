@@ -16,11 +16,6 @@
     <height>730</height>
    </size>
   </property>
-  <property name="font">
-   <font>
-    <family>Segoe UI</family>
-   </font>
-  </property>
   <property name="windowTitle">
    <string>Profile Import</string>
   </property>
@@ -59,11 +54,6 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
-         </property>
-         <property name="font">
-          <font>
-           <family>Segoe UI</family>
-          </font>
          </property>
          <property name="columnCount">
           <number>0</number>
@@ -104,11 +94,6 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
-         </property>
-         <property name="font">
-          <font>
-           <family>Segoe UI</family>
-          </font>
          </property>
          <property name="columnCount">
           <number>0</number>

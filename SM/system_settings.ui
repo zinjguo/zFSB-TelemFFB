@@ -76,19 +76,6 @@
              </property>
             </widget>
            </item>
-           <item row="3" column="0" colspan="2">
-            <widget class="LabeledToggle" name="ignoreUpdate">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>Disable Update Prompt on Startup</string>
-             </property>
-            </widget>
-           </item>
            <item row="1" column="0">
             <widget class="QLabel" name="label_2">
              <property name="text">
@@ -1098,131 +1085,6 @@ Headless:</string>
          </item>
         </layout>
        </item>
-       <item>
-        <widget class="Line" name="line_4">
-         <property name="lineWidth">
-          <number>2</number>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QGridLayout" name="gridLayout_4">
-         <property name="verticalSpacing">
-          <number>2</number>
-         </property>
-         <item row="3" column="0" alignment="Qt::AlignLeft">
-          <widget class="LabeledToggle" name="enableVPConfExit">
-           <property name="text">
-            <string>Load on Exit:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="1">
-          <widget class="QLineEdit" name="pathVPConfExit">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="2" column="0" colspan="3">
-          <layout class="QHBoxLayout" name="horizontalLayout_4">
-           <item>
-            <spacer name="horizontalSpacer_8">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeType">
-              <enum>QSizePolicy::Fixed</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="LabeledToggle" name="enableVPConfGlobalDefault">
-             <property name="enabled">
-              <bool>false</bool>
-             </property>
-             <property name="toolTip">
-              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Startup profile will also re-load for any aircraft that does not&lt;/p&gt;&lt;p&gt;have an override defined at the Sim/Class/Model level.  &lt;br/&gt;&lt;br/&gt;The profile will only re-load if the previously loaded aircraft changed&lt;/p&gt;&lt;p&gt;the profile and the new aircraft does not have one defined at the&lt;/p&gt;&lt;p&gt;Sim/Class/Model level.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-             </property>
-             <property name="text">
-              <string>Make Startup Profile Global Default</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item row="1" column="1">
-          <widget class="QLineEdit" name="pathVPConfStartup">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="LabeledToggle" name="enableVPConfStartup">
-           <property name="text">
-            <string>Load on Startup:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0" colspan="2">
-          <widget class="QLabel" name="label_13">
-           <property name="text">
-            <string>VPforce Configurator Profiles:</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0" colspan="2">
-          <widget class="LabeledToggle" name="enableResetGainsExit">
-           <property name="text">
-            <string>Restore Startup Gains on Exit</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QToolButton" name="browseVPConfStartup">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="text">
-            <string>...</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="2" alignment="Qt::AlignRight">
-          <widget class="QToolButton" name="browseVPConfExit">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-           <property name="text">
-            <string>...</string>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <spacer name="verticalSpacer_4">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
       </layout>
      </item>
     </layout>
@@ -1280,7 +1142,6 @@ Headless:</string>
  <tabstops>
   <tabstop>logLevel</tabstop>
   <tabstop>telemTimeout</tabstop>
-  <tabstop>ignoreUpdate</tabstop>
   <tabstop>cb_al_enable</tabstop>
   <tabstop>rb_master_j</tabstop>
   <tabstop>rb_master_p</tabstop>

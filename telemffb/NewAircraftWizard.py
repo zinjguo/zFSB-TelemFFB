@@ -19,13 +19,14 @@
 import re
 
 from PyQt6.QtCore import QRegularExpression
-from PyQt6.QtGui import QRegularExpressionValidator, QFont
+from PyQt6.QtGui import QRegularExpressionValidator
 from PyQt6.QtWidgets import QButtonGroup, QDialog, QFileDialog, QMessageBox, QSizePolicy, QStyle, QComboBox
 
 from . import globals as G
 from . import utils
 from. import xmlutils
 from .ui.Ui_NewAircraftWizard import Ui_NewAircraftWizard
+import styles
 
 class NewAircraftWizard(QDialog, Ui_NewAircraftWizard):
     """
@@ -291,7 +292,7 @@ class NewAircraftWizard(QDialog, Ui_NewAircraftWizard):
             self.cb_clone.clear()
             self.cb_clone.addItem('')  # Not needed since read_models returns one null entry
             max_name_len = max(len(aircraft) for aircraft, _ in self.aircraft_list)
-            font = QFont("Consolas")  # Or "Monospace" or "Consolas"
+            font = styles.app_font()
             self.cb_clone.setFont(font)
             for aircraft, profile in self.aircraft_list:
                 display_text = f"{aircraft.ljust(max_name_len)}  :  {profile}"

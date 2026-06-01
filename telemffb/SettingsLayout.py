@@ -26,11 +26,14 @@ import re
 from PyQt6 import QtWidgets, QtCore
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor, QIcon, QFont, QColor, QPixmap
-from PyQt6.QtWidgets import (QGridLayout, QLabel, QPushButton, QStyle, QMessageBox,
+from PyQt6.QtWidgets import (QFrame, QGridLayout, QLabel, QPushButton, QStyle, QMessageBox,
                              QToolButton, QCheckBox, QComboBox, QLineEdit, QFileDialog, QSpinBox, QHBoxLayout)
 
 from telemffb.ButtonPressThread import ButtonPressThread
-from telemffb.custom_widgets import (InfoLabel, NoWheelSlider, NoWheelNumberSlider, zBlue, t_purple, Toggle, EraseButton, NoWheelComboBox)
+from telemffb.custom_widgets import (
+    InfoLabel, NoWheelSlider, NoWheelNumberSlider, colorPrimary, colorPrimary_translucent_qcolor,
+    Toggle, EraseButton, NoWheelComboBox
+)
 from telemffb.ConfiguratorDialog import ConfiguratorDialog
 from telemffb.AdvancedSpringDialog import AdvancedSpringDialog
 from telemffb.AdvancedGDialog import AdvancedGDialog
@@ -42,6 +45,21 @@ from . import globals as G
 from . import xmlutils
 
 class SettingsLayout(QGridLayout):
+    HIDDEN_SECTION_NAMES = {
+        "system_group",
+        "ffb_group",
+        "inertial_group",
+        "enable_hydraulic_loss_effect",
+        "dummy_weapon_direction",
+        "wind_effect_enabled",
+        "engine_prop_rumble_enabled",
+        "engine_jet_rumble_enabled",
+        "afterburner_effect_enabled",
+    }
+    DISABLED_ENUM_VALUE_NAMES = ("DISABLED", "OFF", "NONE")
+    NUMERIC_DATATYPES = {"anyfloat", "d_float", "d_int", "float", "int", "n_float", "negfloat", "pct_float"}
+    NONE_DATATYPES = {"advspr", "advgs", "configurator", "path", "text", "str", "string"}
+    NON_ACCORDION_SECTION_NAMES = {"basic_group"}
     expanded_items = []
     prereq_list = []
     ##########
@@ -59,6 +77,9 @@ class SettingsLayout(QGridLayout):
         super(SettingsLayout, self).__init__(parent)
         self.exclusive_list = []
         self.parent_expander_dict = {}
+        self._active_section_layout = None
+        self._active_section_frame = None
+        self._top_level_groups_initialized = False
         result = None
         if G.settings_mgr.current_sim != 'nothing':
             a, b, result = xmlutils.read_single_model(G.settings_mgr.current_sim, G.settings_mgr.current_aircraft_name)
@@ -73,6 +94,72 @@ class SettingsLayout(QGridLayout):
         self.adv_spr_dialog = None
         self.advanced_g_settings = None
         self.adv_g_dialog = None
+
+    def addWidget(self, widget, *args, **kwargs):
+        if self._active_section_layout is not None:
+            self._active_section_layout.addWidget(widget, *args, **kwargs)
+        else:
+            super().addWidget(widget, *args, **kwargs)
+
+    def addLayout(self, layout, *args, **kwargs):
+        if self._active_section_layout is not None:
+            self._active_section_layout.addLayout(layout, *args, **kwargs)
+        else:
+            super().addLayout(layout, *args, **kwargs)
+
+    def addItem(self, item, *args, **kwargs):
+        if self._active_section_layout is not None:
+            self._active_section_layout.addItem(item, *args, **kwargs)
+        else:
+            super().addItem(item, *args, **kwargs)
+
+    def removeWidget(self, widget):
+        if self._active_section_layout is not None:
+            self._active_section_layout.removeWidget(widget)
+        else:
+            super().removeWidget(widget)
+
+    def itemAtPosition(self, row, column):
+        if self._active_section_layout is not None:
+            return self._active_section_layout.itemAtPosition(row, column)
+        return super().itemAtPosition(row, column)
+
+    def setRowMinimumHeight(self, row, min_size):
+        if self._active_section_layout is not None:
+            self._active_section_layout.setRowMinimumHeight(row, min_size)
+        else:
+            super().setRowMinimumHeight(row, min_size)
+
+    def setRowStretch(self, row, stretch):
+        if self._active_section_layout is not None:
+            self._active_section_layout.setRowStretch(row, stretch)
+        else:
+            super().setRowStretch(row, stretch)
+
+    def setColumnMinimumWidth(self, column, min_size):
+        if self._active_section_layout is not None:
+            self._active_section_layout.setColumnMinimumWidth(column, min_size)
+        else:
+            super().setColumnMinimumWidth(column, min_size)
+
+    def setColumnStretch(self, column, stretch):
+        if self._active_section_layout is not None:
+            self._active_section_layout.setColumnStretch(column, stretch)
+        else:
+            super().setColumnStretch(column, stretch)
+
+    def eventFilter(self, obj, event):
+        if (
+            obj.objectName() == "settingsGroupHeader"
+            and event.type() == QtCore.QEvent.Type.MouseButtonRelease
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            expand_button = getattr(obj, "_accordion_expand_button", None)
+            if expand_button is not None:
+                expand_button.click()
+                return True
+
+        return super().eventFilter(obj, event)
 
     def handleScrollKeyPressEvent(self, event):
         # Forward key events to each slider in the layout
@@ -152,6 +239,8 @@ class SettingsLayout(QGridLayout):
         prereq = item.get('prereq', '')
         if not prereq:
             # Reached the top-level item
+            if item.get('datatype') == 'group':
+                return item['name'] in self.expanded_items
             if '.0' in item['order']:
                 return True
             else:
@@ -357,9 +446,215 @@ class SettingsLayout(QGridLayout):
                     )
                     self.set_mode(mode, "gforce_effect_mode", datalist)
 
+    @classmethod
+    def _hidden_section_roots(cls, datalist):
+        return {
+            item['name']
+            for item in datalist
+            if item.get('name') in cls.HIDDEN_SECTION_NAMES
+        }
+
+    @classmethod
+    def _parent_group_names(cls, hidden_names):
+        return {
+            name[:-6] if name.endswith('_group') else name
+            for name in hidden_names
+            if name
+        }
+
+    @classmethod
+    def hidden_setting_names(cls, datalist):
+        name_map = {
+            item['name']: item
+            for item in datalist
+            if item.get('name')
+        }
+        hidden_names = cls._hidden_section_roots(datalist)
+        hidden_parent_groups = cls._parent_group_names(hidden_names)
+
+        if not hidden_names:
+            return set()
+
+        visibility_cache = {}
+
+        def is_hidden(item_name, active_names=None):
+            if item_name in visibility_cache:
+                return visibility_cache[item_name]
+
+            if active_names is None:
+                active_names = set()
+
+            if item_name in active_names:
+                visibility_cache[item_name] = False
+                return False
+
+            if item_name in hidden_names:
+                visibility_cache[item_name] = True
+                return True
+
+            item = name_map.get(item_name)
+            if item is None:
+                visibility_cache[item_name] = False
+                return False
+
+            parent_group = item.get('parentgroup', '')
+            if parent_group in hidden_parent_groups:
+                visibility_cache[item_name] = True
+                return True
+
+            prereq = item.get('prereq', '')
+            parent_name = prereq.split('.', 1)[0] if prereq else ''
+            if not parent_name or parent_name == item_name:
+                visibility_cache[item_name] = False
+                return False
+
+            hidden = is_hidden(parent_name, active_names | {item_name})
+            visibility_cache[item_name] = hidden
+            return hidden
+
+        return {
+            item.get('name', '')
+            for item in datalist
+            if is_hidden(item.get('name', ''))
+        }
+
+    @classmethod
+    def _disabled_setting_value(cls, item):
+        datatype = item.get('datatype', '').lower()
+        if datatype == 'bool':
+            return 'false'
+        if datatype in cls.NUMERIC_DATATYPES:
+            return '0'
+        if datatype in {'enumlist', 'anylist', 'list'}:
+            disabled_value = cls._disabled_enum_value(item)
+            if disabled_value is not None:
+                return disabled_value
+            return 'none'
+        if datatype in cls.NONE_DATATYPES:
+            return 'none'
+        if datatype == 'button':
+            return '0'
+
+        return None
+
+    @classmethod
+    def _disabled_enum_value(cls, item):
+        validvalues = item.get('validvalues', '')
+        enum_map = getattr(G.settings_mgr, validvalues, None)
+        if isinstance(enum_map, dict):
+            for enum_member in enum_map:
+                member_name = getattr(enum_member, 'name', '').upper()
+                if member_name in cls.DISABLED_ENUM_VALUE_NAMES:
+                    return enum_member.name
+
+        for value in validvalues.split(','):
+            value = value.strip()
+            if value.upper() in cls.DISABLED_ENUM_VALUE_NAMES:
+                return value
+
+        return None
+
+    @classmethod
+    def disabled_hidden_settings(cls, datalist):
+        hidden_names = cls.hidden_setting_names(datalist)
+        disabled = {}
+
+        for item in datalist:
+            name = item.get('name', '')
+            if name not in hidden_names:
+                continue
+
+            disabled_value = cls._disabled_setting_value(item)
+            if disabled_value is not None:
+                disabled[name] = disabled_value
+
+        return disabled
+
+    @classmethod
+    def disabled_effect_settings(cls, datalist):
+        return cls.disabled_hidden_settings(datalist)
+
+    def _filter_hidden_sections(self, datalist):
+        hidden_names = self.hidden_setting_names(datalist)
+        return [
+            item
+            for item in datalist
+            if item.get('name', '') not in hidden_names
+        ]
+
+    def _is_top_level_group(self, item):
+        return (
+            item.get('datatype') == 'group'
+            and (
+                item.get('prereq', '') == ''
+                or '.0' in item.get('order', '')
+            )
+        )
+
+    def _initialize_top_level_groups(self, datalist):
+        if self._top_level_groups_initialized:
+            return
+
+        for item in datalist:
+            if self._is_top_level_group(item) and item['name'] not in self.expanded_items:
+                self.expanded_items.append(item['name'])
+
+        self._top_level_groups_initialized = True
+
+    def _configure_settings_grid(self, layout, expanded=False):
+        bottom_padding = styles.settings_group_expanded_bottom_padding if expanded else 0
+        layout.setContentsMargins(0, 0, 0, bottom_padding)
+        layout.setHorizontalSpacing(8)
+        layout.setVerticalSpacing(6)
+        layout.setColumnMinimumWidth(0, 30)
+        layout.setColumnMinimumWidth(7, 20)
+        layout.setColumnStretch(5, 10)
+
+    def _start_settings_section(self, outer_row, item):
+        section_frame = QFrame()
+        section_frame.setObjectName("settingsGroupContainer")
+        section_frame.setStyleSheet(styles.SETTINGS_GROUP_CONTAINER_STYLESHEET)
+
+        section_layout = QGridLayout(section_frame)
+        has_visible_body = (
+            item['name'] in self.expanded_items
+            or item['name'] in self.NON_ACCORDION_SECTION_NAMES
+        )
+        self._configure_settings_grid(section_layout, has_visible_body)
+
+        super().addWidget(section_frame, outer_row, 0, 1, 12)
+        self._active_section_frame = section_frame
+        self._active_section_layout = section_layout
+
+    def _make_group_header(self, item, label, expand_button):
+        header = QFrame()
+        header.setObjectName("settingsGroupHeader")
+        header.setProperty("accordion", item['name'] not in self.NON_ACCORDION_SECTION_NAMES)
+        header.setProperty("expanded", item['name'] in self.expanded_items)
+        header.setStyleSheet(styles.SETTINGS_GROUP_HEADER_STYLESHEET)
+        header.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
+        header.setToolTip(item.get('info', ''))
+
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(8, 4, 8, 4)
+        header_layout.setSpacing(8)
+        header_layout.addWidget(label, stretch=1, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        label.text_label.setStyleSheet(styles.GROUP_LABEL_STYLESHEET)
+
+        if item['name'] not in self.NON_ACCORDION_SECTION_NAMES:
+            header.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
+            header._accordion_expand_button = expand_button
+            header.installEventFilter(self)
+            header_layout.addWidget(expand_button, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            label.setClickable(True)
+            label.clicked.connect(expand_button.click)
+
+        return header
 
     def build_rows(self, datalist):
         sorted_data = sorted(datalist, key=lambda x: float(x['order']))
+        sorted_data = self._filter_hidden_sections(sorted_data)
         # self.prereq_list = xmlutils.read_prereqs()
         self.convert_to_springmode(sorted_data)
         self.convert_dcs_il2_pedal_to_springmode(sorted_data)
@@ -369,6 +664,7 @@ class SettingsLayout(QGridLayout):
         self.prereq_list = self.read_active_prereqs(sorted_data)
         self.has_bump(sorted_data)
         self.append_prereq_count(sorted_data)
+        self._initialize_top_level_groups(sorted_data)
         self.add_expanded(sorted_data)
         self.is_visible(sorted_data)
         self.get_parent_indent(sorted_data)
@@ -382,7 +678,10 @@ class SettingsLayout(QGridLayout):
                     return True
             return False
 
+        outer_row = 0
         i = 0
+        self._active_section_layout = None
+        self._active_section_frame = None
         for item in newlist:
             bumped_up = item['order'][-1:] == '1' and '.' in item['order']
             rowdisabled = False
@@ -390,14 +689,21 @@ class SettingsLayout(QGridLayout):
             is_expnd = is_expanded(item)
             # print(f"{item['order']} - {item['value']} - b {bumped_up} - hb {item['hasbump']} - ex {is_expnd} - hs {item['has_expander']} - pex {item['parent_expanded']} - iv {item['is_visible']} - pcount {item['prereq_count']} - {item['displayname']} - pr {item['prereq']}")
             if item['is_visible'].lower() == 'true':
+                if self._active_section_layout is None or self._is_top_level_group(item):
+                    self._start_settings_section(outer_row, item)
+                    outer_row += 1
+                    i = 0
+
                 i += 1
                 if bumped_up:
                     if self.bump_up:  # debug
                         i -= 1   # bump .1 setting onto the enable row
                 self.generate_settings_row(item, i, rowdisabled)
 
+        self._active_section_layout = None
+        self._active_section_frame = None
         spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Policy.Minimum, QtWidgets.QSizePolicy.Policy.Expanding)
-        self.addItem(spacerItem, i+1, 1, 1, 1)
+        super().addItem(spacerItem, outer_row, 1, 1, 1)
 
         # set expander column minimum size so it does not shrink and shift layout when no expanders are visible
         self.setColumnMinimumWidth(0, 30)
@@ -559,8 +865,8 @@ class SettingsLayout(QGridLayout):
                     self.exclusive_list.append(pair)
             # print(item)
             checkbox = Toggle(
-                checked_color=zBlue,
-                bar_color=t_purple
+                checked_color=colorPrimary,
+                bar_color=colorPrimary_translucent_qcolor
             )
 
             # checkbox = AnimatedToggle(
@@ -610,7 +916,8 @@ class SettingsLayout(QGridLayout):
 
         cdb = f"{lbl_col} {lbl_colspan} ind:{item['indent']} " if self.show_col_debug else ''
         label.setToolTip(f"{cdb}{item['info']}")
-        self.addWidget(label, i, lbl_col, 1, lbl_colspan)
+        if item['datatype'] != 'group':
+            self.addWidget(label, i, lbl_col, 1, lbl_colspan)
 
         slider = NoWheelSlider()
         slider.setOrientation(QtCore.Qt.Orientation.Horizontal)
@@ -1002,9 +1309,8 @@ class SettingsLayout(QGridLayout):
             b_txt = 'Configure Settings' if item['value'] == "none" else "Edit Settings"
             # print(f"ADVANCED SPRING {self.advanced_spring_settings}")
             self.adv_spr_button = QPushButton(b_txt)
-            self.adv_spr_button.setMinimumWidth(150)
-            self.adv_spr_button.setMinimumHeight(25)
             self.adv_spr_button.setObjectName(f"advspr_{item['name']}")
+            self.adv_spr_button.setStyleSheet(styles.SETTINGS_EDIT_BUTTON_STYLESHEET)
             self.adv_spr_button.setCursor(QCursor(QtCore.Qt.CursorShape.PointingHandCursor))
             self.adv_spr_button.clicked.connect(lambda: self.advanced_spring_button_clicked(self.advanced_spring_settings))
             self.addWidget(self.adv_spr_button, i, entry_col, 1, entry_colspan, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -1035,7 +1341,7 @@ class SettingsLayout(QGridLayout):
 
 
 
-        if item['has_expander'].lower() == 'true':
+        if item['has_expander'].lower() == 'true' and item['datatype'] != 'group':
             self.addWidget(expand_button, i, exp_col)
             expand_button.setHidden(rowdisabled)
 
@@ -1053,11 +1359,6 @@ class SettingsLayout(QGridLayout):
                     if item['hasbump'].lower() != 'true':
                         row_count += 1
                     expand_button.setMaximumHeight(200)
-        # grouping collapsible header
-        if item['datatype'] == 'group':
-            expand_button.setVisible(False)
-
-
         label.setDisabled(rowdisabled)
         slider.setDisabled(rowdisabled)
         d_slider.setDisabled(rowdisabled)
@@ -1121,7 +1422,8 @@ class SettingsLayout(QGridLayout):
                 info_label.setEnabled(False)
                 include_action = True
 
-        self.addWidget(action_item, i, erase_col, alignment=Qt.AlignmentFlag.AlignCenter)
+        if item['datatype'] != 'group':
+            self.addWidget(action_item, i, erase_col, alignment=Qt.AlignmentFlag.AlignCenter)
 
         if include_action:
             action_item.setVisible(True)
@@ -1129,7 +1431,11 @@ class SettingsLayout(QGridLayout):
         self.setRowStretch(i, 0)
 
 
-        if item['has_expander'].lower() == 'true' or item['datatype'] == 'group':
+        if item['datatype'] == 'group':
+            group_header = self._make_group_header(item, label, expand_button)
+            self.addWidget(group_header, i, 0, 1, 12)
+
+        elif item['has_expander'].lower() == 'true':
 
             labeltext = item["name"] if self.show_settings_names else item["displayname"]
             if '.0' not in item['order']:
@@ -1340,13 +1646,18 @@ class SettingsLayout(QGridLayout):
 
     def expander_clicked(self):
         self.trigger_form_reload = True
-        logging.debug(f"expander {self.sender().objectName()} clicked.  value: {self.sender().text()}")
-        settingname = self.sender().objectName().replace('ex_', '')
-        if self.sender().arrowType() == Qt.ArrowType.RightArrow:
+        sender = self.sender()
+        logging.debug(f"expander {sender.objectName()} clicked.  value: {sender.text()}")
+        settingname = sender.objectName().replace('ex_', '')
+        if settingname in self.NON_ACCORDION_SECTION_NAMES:
+            return
+
+        if sender.arrowType() == Qt.ArrowType.RightArrow:
             # print ('expanded')
 
-            self.expanded_items.append(settingname)
-            self.sender().setArrowType(Qt.ArrowType.DownArrow)
+            if settingname not in self.expanded_items:
+                self.expanded_items.append(settingname)
+            sender.setArrowType(Qt.ArrowType.DownArrow)
 
             self.reload_caller()
         else:
@@ -1356,7 +1667,7 @@ class SettingsLayout(QGridLayout):
                 if ex != settingname:
                     new_exp_items.append(ex)
             self.expanded_items = new_exp_items
-            self.sender().setArrowType(Qt.ArrowType.DownArrow)
+            sender.setArrowType(Qt.ArrowType.RightArrow)
 
             self.reload_caller()
 

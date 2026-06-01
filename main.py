@@ -41,7 +41,7 @@ Application Flow:
 import sys
 # import faulthandler
 # faulthandler.enable()
-from PyQt6.QtGui import QIcon, QColor, QFont
+from PyQt6.QtGui import QIcon, QFontDatabase
 
 from telemffb.CmdLineArgs import CmdLineArgs
 
@@ -59,7 +59,7 @@ import subprocess
 import traceback
 from datetime import datetime
 
-from PyQt6 import QtCore, QtWidgets, QtGui
+from PyQt6 import QtCore, QtWidgets
 from PyQt6.QtCore import QCoreApplication, Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit
 
@@ -192,39 +192,9 @@ def _setup_theme_and_styling(app):
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     G.useDarkMode = True
 
-    # Create and set custom palette with accent color
     palette = app.palette()
-    accent_color = QtGui.QColor(styles.zBlue)
-    palette.setColor(QtGui.QPalette.ColorRole.Highlight, accent_color)
-    palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor('white'))
-    palette.setColor(QtGui.QPalette.ColorRole.Link, accent_color)
-    app.setPalette(palette)
-
-    _apply_dark_mode_palette(app, palette)
+    styles.apply_dark_mode_palette(app, palette)
     _apply_custom_stylesheet(app)
-
-def _apply_dark_mode_palette(app, palette):
-    """Apply dark mode color palette."""
-    # Base colors with updated ColorRole enums
-    palette.setColor(QtGui.QPalette.ColorRole.Window, QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ColorRole.WindowText, QtGui.QColor("#dddddd"))
-    palette.setColor(QtGui.QPalette.ColorRole.Base, QColor(35, 35, 35))
-    palette.setColor(QtGui.QPalette.ColorRole.AlternateBase, QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ColorRole.ToolTipBase, QtGui.QColor('#dddddd'))
-    palette.setColor(QtGui.QPalette.ColorRole.ToolTipText, QtGui.QColor('#dddddd'))
-    palette.setColor(QtGui.QPalette.ColorRole.Text, QtGui.QColor("#cccccc"))
-    palette.setColor(QtGui.QPalette.ColorRole.Button, QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor('#dddddd'))
-    palette.setColor(QtGui.QPalette.ColorRole.BrightText, QtGui.QColor('red'))
-
-    # Disabled colors
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.WindowText, QColor(127, 127, 127))
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Text, QColor(127, 127, 127))
-    palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.ButtonText, QColor(127, 127, 127))
-    palette.setColor(QtGui.QPalette.ColorRole.ToolTipBase, QColor(43, 43, 43))  # or #2b2b2b
-    palette.setColor(QtGui.QPalette.ColorRole.ToolTipText, QtGui.QColor('#dddddd'))
-
-    app.setPalette(palette)
 
 def _apply_custom_stylesheet(app):
     """Apply the dark-only application stylesheet."""
@@ -631,7 +601,10 @@ def main():
     # Initialize Qt application with Fusion style for consistent cross-platform appearance
     app = QApplication(sys.argv)
     app.setStyle('fusion')  # Set Fusion style
-    app.setFont(QFont('Segoe UI', 10))
+    QFontDatabase.addApplicationFont(utils.get_resource_path('image/Roboto-VariableFont_wdth,wght.ttf', prefer_root=True))
+    QFontDatabase.addApplicationFont(utils.get_resource_path('image/Roboto-Italic-VariableFont_wdth,wght.ttf', prefer_root=True))
+    app.setFont(styles.app_font(10))
+    styles.install_button_text_filter(app)
 
     # ============================================================================
     # PHASE 2: Command Line Arguments and Instance Management
@@ -787,8 +760,7 @@ def main():
     # Show main window based on configuration (minimized, tray, normal)
     _handle_window_display(headless_mode)
 
-    # Check for version updates in background (non-release builds)
-    _check_version_update()
+    # Startup update checks are disabled; leave manual updater code intact.
 
     # Setup master-specific features (system tray, etc.)
     if G.master_instance:

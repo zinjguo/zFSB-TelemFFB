@@ -17,11 +17,12 @@
 #
 
 
-from PyQt6.QtGui import QFont, QIcon, QTextCursor
+from PyQt6.QtGui import QIcon, QTextCursor
 from PyQt6.QtWidgets import QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QVBoxLayout, QWidget, QMainWindow, QPlainTextEdit
 import os
 
 import telemffb.utils as utils
+import styles
 
 import os
 
@@ -45,7 +46,7 @@ class LogTailWindow(QMainWindow):
         # Replicate the log_tab_widget contents in the new window
         self.log_widget = QPlainTextEdit(self.central_widget)
         self.log_widget.setReadOnly(True)
-        self.log_widget.setFont(QFont("Courier New"))
+        self.log_widget.setFont(styles.app_font())
         self.log_widget.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
 
         self.clear_button = QPushButton("Clear", self.central_widget)

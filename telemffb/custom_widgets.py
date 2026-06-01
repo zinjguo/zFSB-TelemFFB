@@ -33,12 +33,15 @@ from PyQt6.QtCore import Qt
 
 import numpy as np
 
+import styles
 import telemffb.globals as G
 from telemffb.utils import HiDpiPixmap, Akima1DInterpolator, debug_caller_args, get_resource_path
-import styles
 
-zBlue = styles.zBlue
-t_purple = QColor(f"#44{zBlue[-6:]}")
+colorPrimary = styles.colorPrimary
+colorPrimary_translucent_qcolor = QColor(styles.colorPrimary_translucent)
+TOGGLE_TRACK_EXTRA_HEIGHT = 4
+TOGGLE_THUMB_X_OFFSET = 2
+TOGGLE_THUMB_ON_X_OFFSET = TOGGLE_THUMB_X_OFFSET - 5
 
 class DetachedTabWindow(QtWidgets.QMainWindow):
     reattachRequested = pyqtSignal(str)  # emit the tab title
@@ -90,15 +93,13 @@ class AppStatusWidget(QWidget):
         self.request_set_active_vpconf.connect(self.set_active_vpconf)
         self.request_set_active_configurator.connect(self.set_active_configurator)
 
-        grid = QGridLayout(self)
-        grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.setVerticalSpacing(10)
-        grid.setHorizontalSpacing(10)
+        status_layout = QGridLayout(self)
+        status_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-        row = 0
-        label_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        value_align = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        status_layout.setHorizontalSpacing(8)
+        status_layout.setVerticalSpacing(6)
+        status_layout.setColumnStretch(0, 0)
+        status_layout.setColumnStretch(1, 1)
 
         sim_status_header = InfoLabel()
         sim_status_header.text_label.setText('Sim Status:')
@@ -118,6 +119,8 @@ class AppStatusWidget(QWidget):
         joystick_status_layout.addWidget(self.joystick_status_label)
         joystick_status_layout.addWidget(self.joystick_status_indicator)
         self.set_joystick_connected(False)
+
+        self.joystick_status_header = QLabel("Joystick Status:")
 
         self.cur_craft_label = QLabel("None Detected")
         self.cur_pattern_label = QLabel("(No Match)")
@@ -170,68 +173,47 @@ class AppStatusWidget(QWidget):
 
         self.offline_label = QLabel('Telemetry is paused while in offline editing mode')
         self.offline_label.setWordWrap(True)
-        self.offline_label.setMinimumHeight(60)
         self.offline_label.setSizePolicy(size_policy)
         self.offline_label.setStyleSheet("""
             QLabel {
                 background-color: rgba(255, 165, 0, 100);
                 color: palette(windowText);
                 padding: 6px 10px;
+                margin: 0px;
                 font-weight: bold;
-                border: 1px solid palette(dark);
-                border-radius: 6px;
+                border-radius: 10px;
             }
         """)
 
-        # Stacked message layout
-        self.message_empty_label = QLabel('No messages')
-        self.message_empty_label.setStyleSheet("""
-            QLabel {
-                color: palette(mid);
-                padding: 6px 8px;
-            }
-        """)
-
+        # Stacked message layout. Index 0 is an intentionally empty, collapsed
+        # state so the standalone layout only takes space when it has content.
+        self.message_empty_label = QLabel('')
+        self.message_empty_label.setFixedHeight(0)
         self.message_stack = QStackedLayout()
         self.message_stack.addWidget(self.message_empty_label)  # Index 0
         self.message_stack.addWidget(self.notification_label)  # Index 1
         self.message_stack.addWidget(self.offline_label)  # Index 2
         self.message_stack.setCurrentIndex(0)
 
-        self.message_box = QGroupBox("Messages")
-        self.message_box.setMinimumWidth(220)
-        self.message_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        self.message_box.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid palette(mid);
-                margin-top: 8px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 8px;
-                padding: 0 4px;
-            }
-        """)
-        message_box_layout = QVBoxLayout(self.message_box)
-        message_box_layout.setContentsMargins(8, 12, 8, 8)
-        message_box_layout.addLayout(self.message_stack)
+        self.message_widget = QWidget()
+        self.message_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        message_layout = QVBoxLayout(self.message_widget)
+        message_layout.setContentsMargins(
+            styles.default_container_padding,
+            styles.default_container_padding,
+            styles.default_container_padding,
+            styles.default_container_padding
+        )
+        message_layout.setSpacing(0)
+        message_layout.addLayout(self.message_stack)
+        self.message_widget.hide()
 
         # Layout content
-        grid.addWidget(QLabel("Joystick Status:"), row, 0, alignment=label_align)
-        grid.addWidget(self.joystick_status_value, row, 1, alignment=value_align)
-        row += 1
-
-        grid.addWidget(sim_status_header, row, 0, alignment=label_align)
-        grid.addWidget(self.sim_status_label, row, 1, alignment=value_align)
-        row += 1
-
-        grid.addWidget(QLabel("Current Aircraft:"), row, 0, alignment=label_align)
-        grid.addWidget(self.cur_craft_label, row, 1, alignment=value_align)
-        row += 1
-
-        grid.addWidget(QLabel("Matched Model:"), row, 0, alignment=label_align)
-        grid.addWidget(self.cur_pattern_label, row, 1, alignment=value_align)
-        row += 1
+        row = 0
+        row = self._add_status_row(status_layout, row, self.joystick_status_header, self.joystick_status_value)
+        row = self._add_status_row(status_layout, row, sim_status_header, self.sim_status_label)
+        row = self._add_status_row(status_layout, row, QLabel("Current Aircraft:"), self.cur_craft_label)
+        row = self._add_status_row(status_layout, row, QLabel("Matched Model:"), self.cur_pattern_label)
 
         self.cb_selectProfileCombo = QComboBox()
         self.cb_selectProfileCombo.addItems(['Select...'])
@@ -243,25 +225,26 @@ class AppStatusWidget(QWidget):
         profile_row_layout.addWidget(self.active_profile_label)
         profile_row_layout.addWidget(self.cb_selectProfileCombo)
 
-        grid.addWidget(QLabel("Active Profile:"), row, 0, alignment=label_align)
-        grid.addLayout(profile_row_layout, row, 1)
-        row += 1
+        profile_value = QWidget()
+        profile_value.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        profile_value.setLayout(profile_row_layout)
+        row = self._add_status_row(status_layout, row, QLabel("Active Profile:"), profile_value)
 
-        grid.addWidget(self.active_vpconf_header, row, 0, alignment=label_align)
-        grid.addWidget(self.active_vpconf_label, row, 1, alignment=value_align)
-        row += 1
-
-        grid.addWidget(self.active_configurator_header, row, 0, alignment=label_align)
-        grid.addWidget(self.active_configurator_label, row, 1, alignment=value_align)
-        row += 1
-
-        grid.addWidget(self.message_box, 0, 2, row, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
+        row = self._add_status_row(status_layout, row, self.active_vpconf_header, self.active_vpconf_label)
+        self._add_status_row(status_layout, row, self.active_configurator_header, self.active_configurator_label)
 
         if not master_instance:
             self.cb_selectProfileCombo.setDisabled(True)
             self.cb_selectProfileCombo.setVisible(False)
+
+    def _add_status_row(self, layout, row, label_widget, value_widget):
+        layout.addWidget(label_widget, row, 0, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(value_widget, row, 1, alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        return row + 1
+
+    def _set_message_index(self, index):
+        self.message_stack.setCurrentIndex(index)
+        self.message_widget.setVisible(index != 0)
 
     def set_joystick_connected(self, connected: bool):
         color = "#00994c" if connected else "#cc3333"
@@ -283,21 +266,21 @@ class AppStatusWidget(QWidget):
         self.offline_recall_ac = ''
         self.offline_recall_ptn = ''
         self.offline_recall_pro = ''
-        self.message_stack.setCurrentIndex(0)
+        self._set_message_index(0)
 
 
     def set_running(self, source):
         if self.offline: return
         self.sim_status_label.set_status(source, 'Running')
         self.cb_selectProfileCombo.setDisabled(False)
-        self.message_stack.setCurrentIndex(0)
+        self._set_message_index(0)
         self.pulse_label(self.sim_status_label.status_label, pulses=2, duration_ms=1000, color=QColor(0,200,0))
 
     def set_paused(self, source):
         if self.offline: return
         self.sim_status_label.set_status(source, 'Paused')
         self.cb_selectProfileCombo.setDisabled(False)
-        self.message_stack.setCurrentIndex(0)
+        self._set_message_index(0)
         self.pulse_label(self.sim_status_label.status_label, pulses=2, duration_ms=1000, color=QColor(255,200,0))
 
     def set_error(self, source):
@@ -316,19 +299,22 @@ class AppStatusWidget(QWidget):
         self.cur_pattern_label.setText('Offline')
         self.active_profile_label.setText('Offline')
         self.cb_selectProfileCombo.setDisabled(True)
-        self.message_stack.setCurrentIndex(2)
+        self._set_message_index(2)
         self.pulse_label(self.sim_status_label.status_label, stop=True)
 
     def flag_error(self, message):
+        if not message:
+            self.clear_error()
+            return
         self.notification_label.setText(message)
         self.notification_label.show()
-        self.message_stack.setCurrentIndex(1)
+        self._set_message_index(1)
 
 
     def clear_error(self):
         self.notification_label.setText('')
         self.notification_label.hide()
-        self.message_stack.setCurrentIndex(0)
+        self._set_message_index(0)
 
 
     def set_fullname(self, full_name):
@@ -597,9 +583,14 @@ class DelayTimerSlider(QSlider):
         self.delayedValueChanged.emit(self.value())
 
 class NoWheelComboBox(QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setProperty("noWheelCombo", True)
+
     def wheelEvent(self, event: QWheelEvent):
         # Ignore the wheel event entirely
         event.ignore()
+
 
 class NoWheelSlider(QSlider):
     delayedValueChanged = pyqtSignal(int)
@@ -608,7 +599,7 @@ class NoWheelSlider(QSlider):
         super(NoWheelSlider, self).__init__(*args, **kwargs)
         # Default colors
         self.groove_color = "#bbb"
-        self.handle_color = zBlue
+        self.handle_color = colorPrimary
         self.handle_height = 20
         self.handle_width = 16
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -692,23 +683,8 @@ class NoWheelSlider(QSlider):
             groove_x = (self.width() - 8) / 2  # groove_width is 8
             handle_rect.moveLeft(int(groove_x + 8 / 2 - self.handle_width / 2))
 
-        # Draw custom gradient background
-        # Shift center to upper-left
-        cx = handle_rect.left() + handle_rect.width() * 0.3
-        cy = handle_rect.top() + handle_rect.height() * 0.3
-
-        # Increase radius for smoother falloff
-        radius = max(handle_rect.width(), handle_rect.height())
-        gradient = QRadialGradient(cx, cy, radius)
-
-        lighter_val = 150 if G.useDarkMode else 150
-        darker_val = 200 if G.useDarkMode else 150
-        gradient.setColorAt(0.0, QColor(self.handle_color).lighter(lighter_val))
-        gradient.setColorAt(0.15, QColor(self.handle_color))
-        gradient.setColorAt(1.0, QColor(self.handle_color).darker(darker_val))
-
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(QPen(QColor(self.handle_color).darker(120)))
+        painter.setBrush(QBrush(QColor(self.handle_color)))
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(handle_rect, self.handle_height / 4, self.handle_height / 4)
 
         painter.end()
@@ -734,13 +710,8 @@ class NoWheelSlider(QSlider):
         # Generate CSS based on color and size properties
         css = f"""
             QSlider::handle:horizontal {{
-                background: qradialgradient(
-                    cx: 0.3, cy: 0.5, fx: 0.3, fy: 0.35, radius: 0.8,
-                    stop: 0.0 #ffffff,
-                    stop: 0.3 {self.handle_color},
-                    stop: 1.0 {QColor(self.handle_color).darker().name()}
-                );
-                border: 1px solid #565a5e;
+                background: {self.handle_color};
+                border: 0px solid transparent;
                 width: {int(self.handle_width)}px;  /* Adjusted handle width */
                 height: {int(self.handle_height)}px;  /* Adjusted handle height */
                 border-radius: {int(self.handle_height / 4 )}px;  /* Adjusted border radius */
@@ -854,25 +825,8 @@ class NoWheelNumberSlider(NoWheelSlider):
             groove_x = (self.width() - groove_width) / 2
             handle_rect.moveLeft(int(groove_x + groove_width / 2 - self.handle_width / 2))
 
-        # Draw custom gradient background
-        # Shift center to upper-left
-        cx = handle_rect.left() + handle_rect.width() * 0.25
-        cy = handle_rect.top() + handle_rect.height() * 0.3
-
-        center = handle_rect.center()
-        gradient = QRadialGradient(center.x(), center.y(), handle_rect.width() / 2)
-
-        radius = max(handle_rect.width(), handle_rect.height())
-        gradient = QRadialGradient(cx, cy, radius)
-
-        lighter_val = 150 if G.useDarkMode else 150
-        darker_val = 200 if G.useDarkMode else 150
-        gradient.setColorAt(0.0, QColor(self.handle_color).lighter(lighter_val))
-        gradient.setColorAt(0.1, QColor(self.handle_color))
-        gradient.setColorAt(1.0, QColor(self.handle_color).darker(darker_val))
-
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(QPen(QColor(self.handle_color).darker(120)))
+        painter.setBrush(QBrush(QColor(self.handle_color)))
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(handle_rect, self.handle_height / 4, self.handle_height / 4)
 
         # Draw the value text
@@ -937,6 +891,7 @@ class InfoLabel(QWidget):
     def __init__(self, parent=None, text=None, tooltip=None):
         super(InfoLabel, self).__init__(parent)
         self._clickable = False
+        self._click_started = False
 
         # Text label
         self.text_label = QLabel(self)
@@ -976,7 +931,19 @@ class InfoLabel(QWidget):
 
     def mousePressEvent(self, event):
         if self._clickable:
+            self._click_started = True
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._clickable and self._click_started:
+            self._click_started = False
             self.clicked.emit()
+            event.accept()
+            return
+        self._click_started = False
+        super().mouseReleaseEvent(event)
 
     def setText(self, text):
         self.text_label.setText(text)
@@ -984,6 +951,9 @@ class InfoLabel(QWidget):
         # self.text_label.setFixedHeight(self.icon_label.height())
 
     def setToolTip(self, tooltip):
+        tooltip = tooltip or ''
+        super().setToolTip(tooltip)
+        self.text_label.setToolTip(tooltip)
         if tooltip:
             self.icon_label.setToolTip(tooltip)
             self.icon_label.setVisible(True)
@@ -1367,8 +1337,8 @@ class Toggle(QCheckBox):
 
     def __init__(self,
                  parent=None,
-                 bar_color=QColor(f"#44{zBlue[-6:]}"),
-                 checked_color=zBlue,
+                 bar_color=colorPrimary_translucent_qcolor,
+                 checked_color=colorPrimary,
                  handle_color=Qt.GlobalColor.white,
                  disabled_color=Qt.GlobalColor.gray):
         super().__init__(parent)
@@ -1381,12 +1351,13 @@ class Toggle(QCheckBox):
         self._checked_color = checked_color
         self._handle_color = handle_color
         self._disabled_color = QColor(disabled_color)
+        self._unchecked_color = QColor(styles.input_disabled_background)
 
-        self._bar_brush = QBrush(bar_color)
-        self._bar_checked_brush = QBrush(QColor(checked_color).lighter())
+        self._bar_brush = QBrush(self._unchecked_color)
+        self._bar_checked_brush = QBrush(QColor(checked_color))
 
         self._handle_brush = QBrush(handle_color)
-        self._handle_checked_brush = QBrush(QColor(checked_color))
+        self._handle_checked_brush = QBrush(handle_color)
 
         # Setup the rest of the widget.
         self.setContentsMargins(8, 0, 8, 0)
@@ -1400,82 +1371,49 @@ class Toggle(QCheckBox):
         return QSize(58, 45)
 
     def hitButton(self, pos: QPointF):
-        return self.contentsRect().contains(pos)
+        if hasattr(pos, "toPoint"):
+            pos = pos.toPoint()
+        return self.rect().contains(pos)
 
     def paintEvent(self, e: QPaintEvent):
-        contRect = self.contentsRect()
-        handleRadius = round(0.24 * contRect.height())
+        toggle_rect = QRectF(self.rect()).adjusted(4, 0, -4, 0)
+        handleRadius = round(0.24 * toggle_rect.height())
 
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         p.setPen(self._transparent_pen)
+        track_height = (handleRadius * 2) + TOGGLE_TRACK_EXTRA_HEIGHT
         barRect = QRectF(
             0, 0,
-            contRect.width() - handleRadius, 0.40 * contRect.height()
+            toggle_rect.width(), track_height
         )
-        barRect.moveCenter(QPointF(contRect.center()))
+        barRect.moveCenter(toggle_rect.center())
         rounding = barRect.height() / 2
 
         # the handle will move along this line
-        trailLength = contRect.width() - 2 * handleRadius
-        xPos = contRect.x() + handleRadius + trailLength * self._handle_position
-
-        # Draw the bar with a subtle 3D sunken effect
-        barGradient = QLinearGradient(0, 0, 0, barRect.height())
-        barGradient.setStart(barRect.topLeft())
-        barGradient.setFinalStop(barRect.bottomLeft())
+        trailLength = barRect.width() - 2 * handleRadius
+        x_offset = TOGGLE_THUMB_X_OFFSET + (TOGGLE_THUMB_ON_X_OFFSET - TOGGLE_THUMB_X_OFFSET) * self._handle_position
+        xPos = barRect.left() + handleRadius + trailLength * self._handle_position + x_offset
 
         if not self.isEnabled():
-            barGradient.setColorAt(0.0, self._disabled_color.lighter(150))
-            barGradient.setColorAt(0.0, self._disabled_color)
-            barGradient.setColorAt(1.0, self._disabled_color.darker(150))
+            bar_color = self._disabled_color
         else:
-            barGradient.setColorAt(0.0, self._bar_color.lighter(150))
-            barGradient.setColorAt(0.5, self._bar_color)
-            barGradient.setColorAt(1.0, self._bar_color.darker(150))
+            bar_color = QColor(self._checked_color) if self.isChecked() else self._unchecked_color
 
-            if self.isChecked():
-                barGradient.setColorAt(0.0, QColor(self._checked_color).lighter(150))
-                barGradient.setColorAt(0.5, QColor(self._checked_color))
-                barGradient.setColorAt(1.0, QColor(self._checked_color).darker(150))
-
-        p.setBrush(QBrush(barGradient))
-        p.drawRoundedRect(barRect, rounding, rounding)
-
-        # Draw the border around the bar
         p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(bar_color))
         p.drawRoundedRect(barRect, rounding, rounding)
 
         if not self.isEnabled():
-            handle_color = self._disabled_color.darker(110)
+            handle_color = QColor(self._handle_color)
         elif self.isChecked():
             handle_color = self._handle_checked_brush.color()
         else:
             handle_color = self._handle_brush.color()
 
-        # Draw the handle with a gradient for 3D effect
-        handleGradient = QRadialGradient(
-            QPointF(xPos - handleRadius / 3, barRect.center().y() - handleRadius / 3),
-            handleRadius
-        )
-
-        if not self.isEnabled():
-            handleGradient.setColorAt(0.0, handle_color.lighter(120))
-            handleGradient.setColorAt(0.4, handle_color)
-            handleGradient.setColorAt(1.0, handle_color.darker(130))
-        elif self.isChecked():
-            handleGradient.setColorAt(0.0, QColor(255, 255, 255, 180))
-            handleGradient.setColorAt(0.3, handle_color)
-            handleGradient.setColorAt(1.0, handle_color.darker(120))
-        else:
-            # OFF + Enabled: More subtle highlight
-            handleGradient.setColorAt(0.0, handle_color.lighter(150))
-            handleGradient.setColorAt(0.3, handle_color)
-            handleGradient.setColorAt(1.0, handle_color.darker(300))
-
-        p.setBrush(handleGradient)
-        p.setPen(QPen(handle_color.darker()))
+        p.setBrush(QBrush(handle_color))
+        p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(
             QPointF(xPos, barRect.center().y()),
             handleRadius, handleRadius)
@@ -1551,20 +1489,20 @@ class AnimatedToggle(QCheckBox):
     def __init__(self,
         parent=None,
         bar_color=Qt.GlobalColor.gray,
-        checked_color=zBlue,
+        checked_color=colorPrimary,
         handle_color=Qt.GlobalColor.white,
         pulse_unchecked_color="#44999999",
-        pulse_checked_color=f"#44{zBlue[-6:]}"
+        pulse_checked_color=styles.colorPrimary_translucent
         ):
         super().__init__(parent)
 
         # Save our properties on the object via self, so we can access them later
         # in the paintEvent.
-        self._bar_brush = QBrush(bar_color)
-        self._bar_checked_brush = QBrush(QColor(checked_color).lighter())
+        self._bar_brush = QBrush(QColor("#cfd0d4"))
+        self._bar_checked_brush = QBrush(QColor(checked_color))
 
         self._handle_brush = QBrush(handle_color)
-        self._handle_checked_brush = QBrush(QColor(checked_color))
+        self._handle_checked_brush = QBrush(handle_color)
 
         self._pulse_unchecked_animation = QBrush(QColor(pulse_unchecked_color))
         self._pulse_checked_animation = QBrush(QColor(pulse_checked_color))
@@ -1594,7 +1532,7 @@ class AnimatedToggle(QCheckBox):
         return QSize(58, 45)
 
     def hitButton(self, pos: QPoint):
-        return self.contentsRect().contains(pos)
+        return self.rect().contains(pos)
 
     @pyqtSlot(int)
     def setup_animation(self, value):
@@ -1607,24 +1545,26 @@ class AnimatedToggle(QCheckBox):
 
     def paintEvent(self, e: QPaintEvent):
 
-        contRect = self.contentsRect()
-        handleRadius = round(0.24 * contRect.height())
+        toggle_rect = QRectF(self.rect()).adjusted(4, 0, -4, 0)
+        handleRadius = round(0.24 * toggle_rect.height())
 
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         p.setPen(self._transparent_pen)
+        track_height = (handleRadius * 2) + TOGGLE_TRACK_EXTRA_HEIGHT
         barRect = QRectF(
             0, 0,
-            contRect.width() - handleRadius, 0.40 * contRect.height()
+            toggle_rect.width(), track_height
         )
-        barRect.moveCenter(contRect.center())
+        barRect.moveCenter(toggle_rect.center())
         rounding = barRect.height() / 2
 
         # the handle will move along this line
-        trailLength = contRect.width() - 2 * handleRadius
+        trailLength = barRect.width() - 2 * handleRadius
 
-        xPos = contRect.x() + handleRadius + trailLength * self._handle_position
+        x_offset = TOGGLE_THUMB_X_OFFSET + (TOGGLE_THUMB_ON_X_OFFSET - TOGGLE_THUMB_X_OFFSET) * self._handle_position
+        xPos = barRect.left() + handleRadius + trailLength * self._handle_position + x_offset
 
         if self.pulse_anim.state() == QPropertyAnimation.Running:
             p.setBrush(
@@ -1634,16 +1574,18 @@ class AnimatedToggle(QCheckBox):
                           self._pulse_radius, self._pulse_radius)
 
         if self.isChecked():
+            p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(self._bar_checked_brush)
             p.drawRoundedRect(barRect, rounding, rounding)
             p.setBrush(self._handle_checked_brush)
 
         else:
+            p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(self._bar_brush)
             p.drawRoundedRect(barRect, rounding, rounding)
-            p.setPen(self._light_grey_pen)
             p.setBrush(self._handle_brush)
 
+        p.setPen(Qt.PenStyle.NoPen)
         p.drawEllipse(
             QPointF(xPos, barRect.center().y()),
             handleRadius, handleRadius)
@@ -1809,12 +1751,12 @@ class CurveWidget(QWidget):
         self.grid_color = QColor(100, 100, 100) if dark_mode else QColor(Qt.GlobalColor.lightGray)
 
         # Curve line
-        self.curve_color = QColor(zBlue) if dark_mode else Qt.GlobalColor.blue
+        self.curve_color = QColor(colorPrimary) if dark_mode else Qt.GlobalColor.blue
 
         # Point fill
         self.point_fill = QColor(255, 200, 200) if dark_mode else QColor(255, 0, 0)
 
-        self.crosshair_color = Qt.GlobalColor.lightGray if G.useDarkMode else QColor(zBlue)
+        self.crosshair_color = Qt.GlobalColor.lightGray if G.useDarkMode else QColor(colorPrimary)
 
     def setEnabled(self, enabled: bool):
         """Enable or disable the widget."""
@@ -1967,7 +1909,7 @@ class CurveWidget(QWidget):
             label_y = rect.top() - 5  # Fixed position slightly above the graph area
 
             painter.setPen(QPen(QColor("white") if G.useDarkMode else QColor("black")))
-            painter.setFont(QFont('Arial', 10, QFont.Weight.Bold))  # Bold font for visibility
+            painter.setFont(styles.app_font(10, QFont.Weight.Bold))
             painter.drawText(label_x, label_y, label_text)
 
         # Apply disabled overlay if the widget is disabled
@@ -2014,7 +1956,7 @@ class CurveWidget(QWidget):
             # 🔽 Draw additional axis description below tick labels
 
             if hasattr(self, "x_label_legend") and self.x_label_legend:
-                painter.setFont(QFont('Arial', 9))
+                painter.setFont(styles.app_font(9))
                 text = self.x_label_legend
                 text_width = painter.fontMetrics().horizontalAdvance(text)
                 center_x = rect.left() + (rect.width() // 2)
@@ -2023,7 +1965,7 @@ class CurveWidget(QWidget):
             # 🔽 Draw Y-axis legend vertically to the left of tick labels
             if hasattr(self, "y_label_legend") and self.y_label_legend:
                 painter.save()
-                painter.setFont(QFont('Arial', 9))
+                painter.setFont(styles.app_font(9))
 
                 text = self.y_label_legend
                 text_width = painter.fontMetrics().height()  # height now represents width of rotated text

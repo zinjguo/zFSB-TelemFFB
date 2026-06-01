@@ -60,7 +60,7 @@ class TeleplotSetupDialog(QDialog, Ui_TeleplotDialog):
 
         # Teleplot Link
         bookmarked_section =  "https://teleplot.fr"
-        linkcolor = f'style="color: {styles.zBlue_light if G.useDarkMode else styles.zBlue};"'
+        linkcolor = f'style="color: {styles.colorPrimary_light if G.useDarkMode else styles.colorPrimary};"'
         self.label.setText(f'Click to open a browser to: <a href="{bookmarked_section}" {linkcolor}>teleplot.fr</a>')
         self.label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         self.label.setOpenExternalLinks(True)
